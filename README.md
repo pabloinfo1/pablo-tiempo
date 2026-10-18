@@ -1,4 +1,4 @@
-# ⚡ Pablo Clima — AEMET Weather App
+# ⚡ Pablómetro — AEMET Weather App
 
 > El tiempo oficial de la **AEMET**, pero con buen gusto. **Puro vibecode**: una aplicación meteorológica ultraligera, minimalista y adaptativa diseñada bajo los principios de **Material Design 3**.
 
