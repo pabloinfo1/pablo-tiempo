@@ -3,50 +3,92 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>El Tiempo</title>
+  <title>Pablómetro</title>
   
-  <!-- Favicon -->
-  <link rel="icon" type="image/jpg" href="favicon.jpg" />
+  <link rel="icon" type="image/png" href="favicon.png" />
   
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,1,0" rel="stylesheet" />
   
   <style>
-    /* Motor de Tema Adaptativo (Claro / Oscuro) */
+    /* VARIABLES BASE (Azul - #1b6ef3) */
     :root {
+      --md-surface: #f8fafc;
+      --md-surface-container: #f1f5f9;
+      --md-surface-container-high: #e2e8f0;
+      --md-primary: #1b6ef3;
+      --text-main: #0f172a;
+      --text-muted: #475569;
+      --border-color: rgba(226, 232, 240, 0.8);
+    }
+
+    /* MODO OSCURO (Sistema y Forzado) */
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --md-surface: #0f172a;
+        --md-surface-container: #1e293b;
+        --md-surface-container-high: #334155;
+        --md-primary: #6bb6ff; /* Azul más claro para contraste */
+        --text-main: #f8fafc;
+        --text-muted: #94a3b8;
+        --border-color: rgba(51, 65, 85, 0.8);
+      }
+    }
+    :root[data-theme="dark"] {
+      --md-surface: #0f172a;
+      --md-surface-container: #1e293b;
+      --md-surface-container-high: #334155;
+      --md-primary: #6bb6ff;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --border-color: rgba(51, 65, 85, 0.8);
+    }
+
+    /* TEMA VERDE (Anterior) */
+    :root[data-color="green"] {
       --md-surface: #fbfdf8;
       --md-surface-container: #f0f3eb;
       --md-surface-container-high: #e9ece3;
       --md-primary: #386a20;
-      --text-main: #0f172a; /* slate-900 */
-      --text-muted: #475569; /* slate-600 */
-      --border-color: rgba(226, 232, 240, 0.6);
     }
-    
     @media (prefers-color-scheme: dark) {
-      :root {
+      :root[data-color="green"]:not([data-theme="light"]) {
         --md-surface: #11140e;
         --md-surface-container: #1e201b;
         --md-surface-container-high: #282b25;
         --md-primary: #9cd67d;
-        --text-main: #f8fafc; /* slate-50 */
-        --text-muted: #94a3b8; /* slate-400 */
-        --border-color: rgba(51, 65, 85, 0.6);
       }
     }
+    :root[data-color="green"][data-theme="dark"] {
+      --md-surface: #11140e;
+      --md-surface-container: #1e201b;
+      --md-surface-container-high: #282b25;
+      --md-primary: #9cd67d;
+    }
+
+    /* TEMA NARANJA Y MORADO (Opcionales para el menú) */
+    :root[data-color="orange"] { --md-primary: #ea580c; }
+    :root[data-color="orange"][data-theme="dark"] { --md-primary: #fb923c; }
+    :root[data-color="purple"] { --md-primary: #9333ea; }
+    :root[data-color="purple"][data-theme="dark"] { --md-primary: #c084fc; }
 
     body { 
       background-color: var(--md-surface); 
       color: var(--text-main);
       font-family: system-ui, -apple-system, sans-serif; 
     }
-    
     .material-symbols-rounded { font-variation-settings: 'FILL' 1; }
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
   </style>
 
   <script>
+    // Inicialización súper rápida para evitar parpadeos de color
+    const savedTheme = localStorage.getItem('app_theme') || 'system';
+    const savedColor = localStorage.getItem('app_color') || 'blue';
+    if (savedTheme !== 'system') document.documentElement.setAttribute('data-theme', savedTheme);
+    document.documentElement.setAttribute('data-color', savedColor);
+
     tailwind.config = {
       theme: {
         extend: {
@@ -70,12 +112,13 @@
 <body class="min-h-screen p-4 md:p-8 max-w-2xl mx-auto relative pb-28">
 
   <header class="relative flex justify-center items-center mb-6 pt-2 h-12">
-    <div class="absolute left-0 flex items-center gap-1.5 text-md-primary">
-      <span class="material-symbols-rounded text-3xl">routine</span>
-      <span class="font-bold text-lg tracking-tight hidden sm:block">Weather</span>
+    <!-- Logotipo e Icono Favicon -->
+    <div class="absolute left-0 flex items-center gap-2 text-md-primary">
+      <img src="favicon.png" alt="Logo" class="w-8 h-8 rounded-lg object-contain">
+      <span class="font-bold text-xl tracking-tight hidden sm:block">Pablómetro</span>
     </div>
     
-    <h1 id="ui-municipio" class="text-2xl font-medium tracking-tight truncate max-w-[180px] sm:max-w-xs text-center">
+    <h1 id="ui-municipio" class="text-2xl font-medium tracking-tight truncate max-w-[170px] sm:max-w-xs text-center">
       Cargando...
     </h1>
   </header>
@@ -86,7 +129,7 @@
       <span id="ui-temp-actual" class="text-6xl font-normal tracking-tighter">--</span>
       <span class="text-2xl mt-1">°</span>
     </div>
-    <p id="ui-desc-actual" class="text-lg mt-1 font-medium capitalize">--</p>
+    <p id="ui-desc-actual" class="text-lg mt-1 font-medium capitalize text-center">--</p>
     <div class="flex gap-4 mt-4 text-sm font-medium text-text-muted">
       <div class="flex items-center gap-1"><span class="material-symbols-rounded text-base">water_drop</span> <span id="ui-humedad">--%</span></div>
       <div class="flex items-center gap-1"><span class="material-symbols-rounded text-base">air</span> <span id="ui-viento">-- km/h</span></div>
@@ -101,18 +144,16 @@
   <section id="ui-lista-dias" class="bg-md-surface-container rounded-md-card overflow-hidden mb-6">
   </section>
 
-  <!-- Píldora de Navegación Flotante Horizontal -->
-  <nav class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-md-surface/80 backdrop-blur-lg shadow-lg border border-border-color rounded-full p-1.5 flex items-center gap-1 z-40">
+  <!-- Píldora de Navegación -->
+  <nav class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-md-surface/80 backdrop-blur-lg shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-border-color rounded-full p-1.5 flex items-center gap-1 z-40">
     <button class="flex items-center gap-2 px-5 py-2.5 bg-md-surface-container-high rounded-full transition">
       <span class="material-symbols-rounded text-[22px] text-md-primary" style="font-variation-settings: 'FILL' 1;">partly_cloudy_day</span>
       <span class="text-sm font-semibold text-md-primary">Tiempo</span>
     </button>
-    
     <button id="btn-search" class="flex items-center gap-2 px-5 py-2.5 hover:bg-md-surface-container/50 rounded-full transition text-text-muted hover:text-text-main">
       <span class="material-symbols-rounded text-[22px]" style="font-variation-settings: 'FILL' 0;">search</span>
       <span class="text-sm font-semibold">Buscar</span>
     </button>
-    
     <button id="btn-options" class="flex items-center gap-2 px-5 py-2.5 hover:bg-md-surface-container/50 rounded-full transition text-text-muted hover:text-text-main">
       <span class="material-symbols-rounded text-[22px]" style="font-variation-settings: 'FILL' 0;">settings</span>
       <span class="text-sm font-semibold">Opciones</span>
@@ -128,13 +169,61 @@
       <input type="text" id="search-input" placeholder="Buscar ciudad o código postal..." 
              class="flex-1 bg-transparent text-lg outline-none placeholder:text-text-muted text-text-main" autocomplete="off">
     </div>
-    
     <button id="btn-gps" class="w-full p-4 flex items-center gap-3 border-b border-border-color hover:bg-md-surface-container active:bg-md-surface-container transition text-left text-md-primary">
       <span class="material-symbols-rounded" id="icono-gps">my_location</span>
       <span class="font-medium text-lg" id="texto-gps">Usar mi ubicación actual</span>
     </button>
-
     <div id="search-results" class="flex-1 overflow-y-auto pb-24">
+    </div>
+  </div>
+
+  <!-- Modal de Opciones (Bottom Sheet) -->
+  <div id="options-modal" class="fixed inset-0 z-50 hidden justify-center items-end">
+    <div id="options-overlay" class="absolute inset-0 bg-black/50 opacity-0 transition-opacity duration-300"></div>
+    
+    <div id="options-panel" class="relative bg-md-surface w-full max-w-2xl rounded-t-3xl p-6 pb-10 shadow-2xl transform translate-y-full transition-transform duration-300 flex flex-col gap-6">
+      <div class="w-12 h-1.5 bg-border-color rounded-full mx-auto mb-2"></div>
+      
+      <h3 class="text-xl font-semibold text-text-main">Ajustes</h3>
+      
+      <!-- Selector de Tema -->
+      <div>
+        <p class="text-sm font-medium text-text-muted mb-3">TEMA</p>
+        <div class="flex gap-2 bg-md-surface-container p-1.5 rounded-2xl">
+          <button class="theme-btn flex-1 py-2 text-sm font-medium rounded-xl transition data-[active=true]:bg-md-surface data-[active=true]:text-md-primary data-[active=true]:shadow-sm" data-theme-val="system">Sistema</button>
+          <button class="theme-btn flex-1 py-2 text-sm font-medium rounded-xl transition data-[active=true]:bg-md-surface data-[active=true]:text-md-primary data-[active=true]:shadow-sm" data-theme-val="light">Claro</button>
+          <button class="theme-btn flex-1 py-2 text-sm font-medium rounded-xl transition data-[active=true]:bg-md-surface data-[active=true]:text-md-primary data-[active=true]:shadow-sm" data-theme-val="dark">Oscuro</button>
+        </div>
+      </div>
+
+      <!-- Selector de Color -->
+      <div>
+        <p class="text-sm font-medium text-text-muted mb-3">COLOR PRINCIPAL</p>
+        <div class="flex gap-4">
+          <!-- Azul -->
+          <button class="color-btn w-12 h-12 rounded-full bg-[#1b6ef3] flex items-center justify-center transition border-2 border-transparent data-[active=true]:border-text-main" data-color-val="blue">
+            <span class="material-symbols-rounded text-white opacity-0 data-[active=true]:opacity-100 transition-opacity">check</span>
+          </button>
+          <!-- Verde -->
+          <button class="color-btn w-12 h-12 rounded-full bg-[#386a20] flex items-center justify-center transition border-2 border-transparent data-[active=true]:border-text-main" data-color-val="green">
+            <span class="material-symbols-rounded text-white opacity-0 data-[active=true]:opacity-100 transition-opacity">check</span>
+          </button>
+          <!-- Naranja -->
+          <button class="color-btn w-12 h-12 rounded-full bg-[#ea580c] flex items-center justify-center transition border-2 border-transparent data-[active=true]:border-text-main" data-color-val="orange">
+            <span class="material-symbols-rounded text-white opacity-0 data-[active=true]:opacity-100 transition-opacity">check</span>
+          </button>
+          <!-- Morado -->
+          <button class="color-btn w-12 h-12 rounded-full bg-[#9333ea] flex items-center justify-center transition border-2 border-transparent data-[active=true]:border-text-main" data-color-val="purple">
+            <span class="material-symbols-rounded text-white opacity-0 data-[active=true]:opacity-100 transition-opacity">check</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Botón Contactar -->
+      <a href="mailto:pabloinfo1@gmail.com" class="w-full py-4 mt-2 bg-md-surface-container-high hover:bg-md-surface-container transition rounded-2xl flex items-center justify-center gap-3 text-text-main font-medium">
+        <span class="material-symbols-rounded text-md-primary">mail</span>
+        Contactar a pabloinfo1@gmail.com
+      </a>
     </div>
   </div>
 
