@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pablómetro</title>
   
+  <!-- Metadatos PWA & iOS -->
   <meta name="theme-color" content="#0f172a">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -12,6 +13,7 @@
   <link rel="apple-touch-icon" href="favicon.png">
   <link rel="icon" type="image/png" href="favicon.png" />
   
+  <!-- Etiquetas Open Graph -->
   <meta property="og:title" content="Pablómetro">
   <meta property="og:description" content="El tiempo oficial de la AEMET, pero con buen gusto. Una aplicación meteorológica ultraligera y minimalista.">
   <meta property="og:image" content="favicon.png">
@@ -74,6 +76,7 @@
       font-family: 'Google Sans', 'Product Sans', 'Outfit', system-ui, sans-serif;
       touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;
+      scroll-behavior: smooth;
     }
     .material-symbols-rounded { font-variation-settings: 'FILL' 1; }
     .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -89,7 +92,8 @@
       let max = Math.max(r, g, b), min = Math.min(r, g, b);
       let h, s, l = (max + min) / 2;
 
-      if (max === min) { h = s = 0; } else {
+      if (max === min) h = s = 0;
+      else {
         let d = max - min;
         s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
         switch (max) {
@@ -99,10 +103,12 @@
         }
         h /= 6;
       }
+
       if (l < 0.65) l = 0.68;
 
       const hue2rgb = (p, q, t) => {
-        if (t < 0) t += 1; if (t > 1) t -= 1;
+        if (t < 0) t += 1;
+        if (t > 1) t -= 1;
         if (t < 1/6) return p + (q - p) * 6 * t;
         if (t < 1/2) return q;
         if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
@@ -114,6 +120,7 @@
       r = Math.round(hue2rgb(p, q, h + 1/3) * 255);
       g = Math.round(hue2rgb(p, q, h) * 255);
       b = Math.round(hue2rgb(p, q, h - 1/3) * 255);
+
       return `#${(1 << 24 | r << 16 | g << 8 | b).toString(16).slice(1)}`;
     };
 
@@ -128,6 +135,7 @@
     const savedColor = localStorage.getItem('app_color') || 'blue';
     
     if (savedTheme !== 'system') document.documentElement.setAttribute('data-theme', savedTheme);
+    
     if (savedColor.startsWith('#')) {
       document.documentElement.setAttribute('data-color', 'custom');
       window.applyCustomColor(savedColor);
@@ -155,14 +163,14 @@
     }
   </script>
 </head>
-<body class="min-h-screen p-4 md:p-8 max-w-2xl mx-auto relative pb-28 scroll-smooth">
+<body class="min-h-screen p-4 md:p-8 max-w-2xl mx-auto relative pb-28">
 
   <div id="toast-notification" class="fixed top-5 left-1/2 -translate-x-1/2 z-[70] bg-md-surface-container-high border border-border-color text-text-main px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 transition-all duration-300 opacity-0 -translate-y-4 pointer-events-none max-w-[90vw]">
     <span id="toast-icon" class="material-symbols-rounded text-md-primary shrink-0">info</span>
     <span id="toast-message" class="text-sm font-medium">Mensaje</span>
   </div>
 
-  <header class="relative flex justify-center items-center mb-6 pt-2 min-h-12">
+  <header class="relative flex justify-center items-center mb-6 pt-2 min-h-12" id="header-top">
     <div class="absolute left-0 flex items-center text-md-primary top-1/2 -translate-y-1/2">
       <img src="favicon.png" alt="Logo" class="w-8 h-8 rounded-lg object-contain">
     </div>
@@ -172,7 +180,7 @@
   </header>
 
   <main id="weather-content" class="transition-opacity duration-300">
-    <section class="bg-md-surface-container-high rounded-md-card p-6 mb-6 flex flex-col items-center justify-center shadow-sm w-full transition-all">
+    <section class="bg-md-surface-container-high rounded-md-card p-6 mb-6 flex flex-col items-center justify-center shadow-sm w-full transition-all relative">
       <span id="ui-icono-actual" class="material-symbols-rounded text-6xl text-md-primary mb-2">cloud</span>
       <div class="flex items-start">
         <span id="ui-temp-actual" class="text-6xl font-normal tracking-tighter">--</span>
@@ -185,20 +193,18 @@
         <div class="flex items-center gap-1"><span class="material-symbols-rounded text-base">air</span> <span id="ui-viento">-- km/h</span></div>
       </div>
 
-      <!-- Contenedor dinámico de Avisos / Alertas -->
-      <div id="ui-alertas" class="hidden mt-4 w-full flex-col gap-2"></div>
+      <!-- Alertas meteorológicas (Naranja, Roja, Amarilla) -->
+      <div id="ui-alertas" class="hidden flex-wrap gap-2 justify-center w-full mt-3"></div>
 
-      <!-- Contenedor dinámico de datos avanzados -->
+      <!-- Contenedor dinámico de previsión completa (datos extra) -->
       <div id="ui-datos-extra" class="hidden grid-cols-2 sm:grid-cols-3 gap-2 w-full mt-5 border-t border-border-color pt-5 text-sm font-medium text-text-muted">
       </div>
     </section>
 
-    <!-- Título y carrusel de horas -->
-    <div id="carrusel-anchor" class="scroll-mt-6">
-      <h2 id="titulo-carrusel-horas" class="text-sm font-semibold ml-2 mb-3 text-text-muted uppercase tracking-wider transition-colors duration-300">Próximas horas</h2>
-      <section id="ui-carrusel-horas" class="flex gap-3 overflow-x-auto no-scrollbar pb-2 mb-8 snap-x scroll-smooth">
-      </section>
-    </div>
+    <!-- Título dinámico para el carrusel de horas -->
+    <h2 id="titulo-carrusel-horas" class="text-sm font-semibold ml-2 mb-3 text-text-muted uppercase tracking-wider transition-all duration-300">Próximas horas</h2>
+    <section id="ui-carrusel-horas" class="flex gap-3 overflow-x-auto no-scrollbar pb-2 mb-8 snap-x scroll-smooth">
+    </section>
 
     <h2 class="text-sm font-semibold ml-2 mb-3 text-text-muted uppercase tracking-wider">Próximos días</h2>
     <section id="ui-lista-dias" class="bg-md-surface-container rounded-md-card overflow-hidden mb-6">
@@ -242,16 +248,16 @@
     <div id="options-panel" class="relative bg-md-surface w-full max-w-2xl rounded-t-3xl p-6 pb-10 shadow-2xl transform translate-y-full transition-transform duration-300 flex flex-col gap-6 max-h-[90vh] overflow-y-auto">
       <div class="w-12 h-1.5 bg-border-color rounded-full mx-auto mb-1 shrink-0"></div>
       
-      <!-- Cabecera Ajustes con Botón X -->
-      <div class="flex justify-between items-center">
+      <!-- Cabecera con botón de cierre -->
+      <div class="flex justify-between items-center -mt-2">
         <h3 class="text-xl font-semibold text-text-main">Ajustes</h3>
-        <button id="btn-close-options" class="p-2 rounded-full bg-md-surface-container hover:bg-md-surface-container-high transition flex items-center justify-center text-text-muted">
+        <button id="btn-close-options" class="p-2 -mr-2 rounded-full hover:bg-md-surface-container transition flex items-center justify-center text-text-muted">
           <span class="material-symbols-rounded">close</span>
         </button>
       </div>
       
       <div>
-        <p class="text-sm font-medium text-text-muted mb-3 uppercase tracking-wider">Tema</p>
+        <p class="text-sm font-medium text-text-muted mb-3">TEMA</p>
         <div class="flex gap-2 bg-md-surface-container p-1.5 rounded-2xl">
           <button class="theme-btn flex-1 py-2 text-sm font-medium rounded-xl transition data-[active=true]:bg-md-surface data-[active=true]:text-md-primary data-[active=true]:shadow-sm" data-theme-val="system">Sistema</button>
           <button class="theme-btn flex-1 py-2 text-sm font-medium rounded-xl transition data-[active=true]:bg-md-surface data-[active=true]:text-md-primary data-[active=true]:shadow-sm" data-theme-val="light">Claro</button>
@@ -260,7 +266,7 @@
       </div>
 
       <div>
-        <p class="text-sm font-medium text-text-muted mb-3 uppercase tracking-wider">Color Principal</p>
+        <p class="text-sm font-medium text-text-muted mb-3">COLOR PRINCIPAL</p>
         <div class="flex gap-4">
           <button class="color-btn group w-12 h-12 rounded-full bg-[#1b6ef3] flex items-center justify-center transition border-2 border-transparent data-[active=true]:border-text-main" data-color-val="blue">
             <span class="material-symbols-rounded text-white opacity-0 group-data-[active=true]:opacity-100 transition-opacity">check</span>
@@ -284,44 +290,61 @@
         </div>
       </div>
 
-      <!-- Sección de datos avanzados por menú desplegable -->
+      <!-- Desplegable Mostrar Previsión Completa -->
       <div>
-        <p class="text-sm font-medium text-text-muted mb-3 uppercase tracking-wider">Información</p>
-        <button id="btn-toggle-advanced-menu" class="w-full py-3.5 px-4 bg-md-surface-container-high hover:bg-md-surface-container transition rounded-2xl flex items-center justify-between text-text-main font-medium">
-          <div class="flex items-center gap-3">
-            <span class="material-symbols-rounded text-md-primary">checklist</span>
-            <span>Mostrar previsión completa</span>
+        <p class="text-sm font-medium text-text-muted mb-3">INFORMACIÓN</p>
+        <div class="bg-md-surface-container-high rounded-2xl overflow-hidden transition-all duration-300">
+          <button id="btn-toggle-advanced-menu" class="w-full py-3.5 px-4 hover:bg-md-surface-container transition flex items-center justify-between text-text-main font-medium">
+            <div class="flex items-center gap-3">
+              <span class="material-symbols-rounded text-md-primary">analytics</span>
+              <span>Mostrar previsión completa</span>
+            </div>
+            <span id="advanced-menu-icon" class="material-symbols-rounded text-text-muted transition-transform duration-300">expand_more</span>
+          </button>
+          
+          <div id="advanced-options-list" class="hidden flex-col pb-2 px-2 gap-1 border-t border-border-color">
+            <!-- Items generados en JS para mantener el código limpio, usando estilos tailwind de toggle -->
+            <label class="flex items-center justify-between p-3 rounded-xl hover:bg-md-surface-container cursor-pointer transition">
+              <span class="text-sm font-medium text-text-main">Índice UV</span>
+              <div class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" class="adv-pref-checkbox sr-only peer" data-key="uv">
+                <div class="w-10 h-6 bg-border-color peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-4 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-md-primary"></div>
+              </div>
+            </label>
+            <label class="flex items-center justify-between p-3 rounded-xl hover:bg-md-surface-container cursor-pointer transition">
+              <span class="text-sm font-medium text-text-main">Cota de nieve</span>
+              <div class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" class="adv-pref-checkbox sr-only peer" data-key="nieve">
+                <div class="w-10 h-6 bg-border-color peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-4 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-md-primary"></div>
+              </div>
+            </label>
+            <label class="flex items-center justify-between p-3 rounded-xl hover:bg-md-surface-container cursor-pointer transition">
+              <span class="text-sm font-medium text-text-main">Probabilidad de tormenta</span>
+              <div class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" class="adv-pref-checkbox sr-only peer" data-key="tormenta">
+                <div class="w-10 h-6 bg-border-color peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-4 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-md-primary"></div>
+              </div>
+            </label>
+            <label class="flex items-center justify-between p-3 rounded-xl hover:bg-md-surface-container cursor-pointer transition">
+              <span class="text-sm font-medium text-text-main">Sensación térmica</span>
+              <div class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" class="adv-pref-checkbox sr-only peer" data-key="sensacion">
+                <div class="w-10 h-6 bg-border-color peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-4 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-md-primary"></div>
+              </div>
+            </label>
+            <label class="flex items-center justify-between p-3 rounded-xl hover:bg-md-surface-container cursor-pointer transition">
+              <span class="text-sm font-medium text-text-main">Velocidad y dir. del viento</span>
+              <div class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" class="adv-pref-checkbox sr-only peer" data-key="viento">
+                <div class="w-10 h-6 bg-border-color peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-4 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-md-primary"></div>
+              </div>
+            </label>
           </div>
-          <span id="advanced-menu-icon" class="material-symbols-rounded text-text-muted transition-transform duration-300">expand_more</span>
-        </button>
-        
-        <!-- Desplegable con los checkboxes -->
-        <div id="advanced-options-container" class="hidden flex-col gap-1 mt-2 px-1">
-          <label class="flex items-center justify-between p-3 rounded-xl hover:bg-md-surface-container-high cursor-pointer transition">
-            <span class="text-sm font-medium text-text-main">Radiación Ultravioleta (UV)</span>
-            <input type="checkbox" class="adv-checkbox w-5 h-5 accent-md-primary" value="uv">
-          </label>
-          <label class="flex items-center justify-between p-3 rounded-xl hover:bg-md-surface-container-high cursor-pointer transition">
-            <span class="text-sm font-medium text-text-main">Cota de nieve</span>
-            <input type="checkbox" class="adv-checkbox w-5 h-5 accent-md-primary" value="nieve">
-          </label>
-          <label class="flex items-center justify-between p-3 rounded-xl hover:bg-md-surface-container-high cursor-pointer transition">
-            <span class="text-sm font-medium text-text-main">Probabilidad de tormenta</span>
-            <input type="checkbox" class="adv-checkbox w-5 h-5 accent-md-primary" value="tormenta">
-          </label>
-          <label class="flex items-center justify-between p-3 rounded-xl hover:bg-md-surface-container-high cursor-pointer transition">
-            <span class="text-sm font-medium text-text-main">Sensación térmica</span>
-            <input type="checkbox" class="adv-checkbox w-5 h-5 accent-md-primary" value="sensacion">
-          </label>
-          <label class="flex items-center justify-between p-3 rounded-xl hover:bg-md-surface-container-high cursor-pointer transition">
-            <span class="text-sm font-medium text-text-main">Rachas y dir. del viento</span>
-            <input type="checkbox" class="adv-checkbox w-5 h-5 accent-md-primary" value="viento">
-          </label>
         </div>
       </div>
 
       <div id="pwa-install-section">
-        <p class="text-sm font-medium text-text-muted mb-3 uppercase tracking-wider">Aplicación</p>
+        <p class="text-sm font-medium text-text-muted mb-3">APLICACIÓN</p>
         <button id="btn-install-pwa" class="w-full py-3.5 px-4 bg-md-surface-container-high hover:bg-md-surface-container transition rounded-2xl flex items-center justify-between text-text-main font-medium">
           <div class="flex items-center gap-3">
             <span class="material-symbols-rounded text-md-primary">install_mobile</span>
@@ -331,9 +354,9 @@
         </button>
       </div>
 
-      <!-- Título de Avisos y Contacto unificado -->
-      <div>
-        <p class="text-sm font-medium text-text-muted mb-3 uppercase tracking-wider">Avisos y Contacto</p>
+      <!-- Nueva sección AVISOS Y CONTACTO -->
+      <div class="mt-1">
+        <p class="text-sm font-medium text-text-muted mb-3">AVISOS Y CONTACTO</p>
         <div class="flex flex-col gap-3">
           <div class="flex gap-3">
             <a href="mailto:pabloinfo1@gmail.com" class="flex-1 py-3 bg-md-surface-container-high hover:bg-md-surface-container transition rounded-2xl flex items-center justify-center gap-2 text-text-main font-medium">
@@ -345,10 +368,12 @@
               Instagram
             </a>
           </div>
+          
           <button id="btn-privacy" class="w-full py-3 bg-md-surface-container-high hover:bg-md-surface-container transition rounded-2xl flex items-center justify-center gap-2 text-text-main font-medium">
             <span class="material-symbols-rounded text-md-primary">cookie</span>
             Privacidad y cookies
           </button>
+          
           <a href="https://www.aemet.es" target="_blank" rel="noopener noreferrer" class="w-full py-3 bg-md-surface-container-high hover:bg-md-surface-container transition rounded-2xl flex items-center justify-center gap-2 text-text-main font-medium">
             <span class="material-symbols-rounded text-md-primary">public</span>
             Datos obtenidos de AEMET
