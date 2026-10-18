@@ -1,118 +1,205 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>El Tiempo</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,1,0" rel="stylesheet" />
+const WORKER_URL = 'https://aemet-proxy.pabloinfo1.workers.dev/';
+let municipiosDB = [];
+
+async function cargarTiempo(ine) {
+  try {
+    const res = await fetch(`${WORKER_URL}?ine=${ine}`);
+    if (!res.ok) throw new Error('Error en la red');
+    const data = await res.json();
+    
+    localStorage.setItem('saved_ine', ine);
+    renderizarUI(data);
+  } catch (error) {
+    console.error("Fallo al cargar el tiempo:", error);
+    document.getElementById('ui-municipio').textContent = "Error de conexión";
+  }
+}
+
+function renderizarUI(data) {
+  document.getElementById('ui-municipio').textContent = data.municipio.nombre;
   
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            'md-surface': '#fbfdf8',
-            'md-surface-container': '#f0f3eb',
-            'md-surface-container-high': '#e9ece3',
-            'md-primary': '#386a20',
-            'md-on-primary': '#ffffff',
-          },
-          borderRadius: {
-            'md-card': '24px',
-          }
-        }
+  document.getElementById('ui-temp-actual').textContent = data.actual.temperatura;
+  document.getElementById('ui-desc-actual').textContent = data.actual.estado_cielo;
+  document.getElementById('ui-humedad').textContent = `${data.actual.humedad}%`;
+  document.getElementById('ui-viento').textContent = `${data.actual.viento_kmh} km/h`;
+  document.getElementById('ui-icono-actual').textContent = data.actual.icono;
+
+  const carrusel = document.getElementById('ui-carrusel-horas');
+  carrusel.innerHTML = '';
+  data.hoy_horas.slice(0, 12).forEach(hora => {
+    const card = document.createElement('div');
+    card.className = 'snap-start shrink-0 bg-md-surface-container rounded-2xl p-4 flex flex-col items-center w-20 shadow-sm';
+    card.innerHTML = `
+      <span class="text-xs font-medium mb-2">${hora.hora}</span>
+      <span class="material-symbols-rounded text-3xl text-md-primary mb-2">${hora.icono}</span>
+      <span class="text-lg font-medium text-text-main">${hora.temperatura}°</span>
+    `;
+    carrusel.appendChild(card);
+  });
+
+  const lista = document.getElementById('ui-lista-dias');
+  lista.innerHTML = '';
+  data.proximos_dias.forEach((dia, index) => {
+    if (index === 0) return; 
+    
+    const row = document.createElement('div');
+    row.className = 'flex justify-between items-center p-4 border-b border-border-color last:border-0';
+    row.innerHTML = `
+      <span class="w-24 font-medium text-text-main">${dia.dia_semana}</span>
+      <div class="flex items-center gap-1 w-16">
+        <span class="material-symbols-rounded text-md-primary">${dia.icono}</span>
+        ${dia.prob_precipitacion > 0 ? `<span class="text-xs text-blue-600 font-bold">${dia.prob_precipitacion}%</span>` : ''}
+      </div>
+      <div class="flex gap-3 text-right w-24">
+        <span class="font-medium text-text-main">${dia.temp_max}°</span>
+        <span class="text-text-muted">${dia.temp_min}°</span>
+      </div>
+    `;
+    lista.appendChild(row);
+  });
+}
+
+function calcularDistancia(lat1, lon1, lat2, lon2) {
+  const R = 6371; 
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  const btnSearch = document.getElementById('btn-search');
+  const searchModal = document.getElementById('search-modal');
+  const btnCloseSearch = document.getElementById('btn-close-search');
+  const searchInput = document.getElementById('search-input');
+  const searchResults = document.getElementById('search-results');
+  const btnGps = document.getElementById('btn-gps');
+  const iconoGps = document.getElementById('icono-gps');
+  const textoGps = document.getElementById('texto-gps');
+
+  if (btnSearch) {
+    btnSearch.addEventListener('click', () => {
+      searchModal.classList.remove('hidden');
+      searchModal.classList.add('flex');
+      searchInput.focus();
+    });
+  }
+
+  if (btnCloseSearch) {
+    btnCloseSearch.addEventListener('click', () => {
+      searchModal.classList.add('hidden');
+      searchModal.classList.remove('flex');
+      searchInput.value = '';
+      searchResults.innerHTML = '';
+      btnGps.classList.remove('hidden');
+    });
+  }
+
+  if (btnGps) {
+    btnGps.addEventListener('click', () => {
+      if (!navigator.geolocation) {
+        alert('Tu navegador no soporta geolocalización');
+        return;
       }
+
+      iconoGps.textContent = 'sync';
+      iconoGps.classList.add('animate-spin');
+      textoGps.textContent = 'Buscando tu zona...';
+
+      navigator.geolocation.getCurrentPosition((position) => {
+        const userLat = position.coords.latitude;
+        const userLon = position.coords.longitude;
+
+        let municipioMasCercano = null;
+        let distanciaMinima = Infinity;
+
+        municipiosDB.forEach(m => {
+          if (m.lat && m.lon) {
+            const dist = calcularDistancia(userLat, userLon, m.lat, m.lon);
+            if (dist < distanciaMinima) {
+              distanciaMinima = dist;
+              municipioMasCercano = m;
+            }
+          }
+        });
+
+        iconoGps.textContent = 'my_location';
+        iconoGps.classList.remove('animate-spin');
+        textoGps.textContent = 'Usar mi ubicación actual';
+
+        if (municipioMasCercano) {
+          seleccionarMunicipio(municipioMasCercano.id_ine);
+        }
+
+      }, (error) => {
+        console.error(error);
+        alert('Activa el permiso de ubicación en tu navegador para usar esta función.');
+        iconoGps.textContent = 'my_location';
+        iconoGps.classList.remove('animate-spin');
+        textoGps.textContent = 'Usar mi ubicación actual';
+      });
+    });
+  }
+
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      const query = e.target.value.toLowerCase().trim();
+      
+      if (query.length > 0) {
+        btnGps.classList.add('hidden');
+      } else {
+        btnGps.classList.remove('hidden');
+        searchResults.innerHTML = '';
+        return;
+      }
+
+      if (query.length < 2) {
+        searchResults.innerHTML = '';
+        return;
+      }
+      
+      const isNumber = /^\d+$/.test(query);
+      
+      const filtrados = municipiosDB.filter(m => {
+        if (isNumber) {
+          return m.cps && m.cps.some(cp => cp.startsWith(query));
+        }
+        return m.nombre.toLowerCase().includes(query) || m.provincia.toLowerCase().includes(query);
+      }).slice(0, 15); 
+      
+      searchResults.innerHTML = filtrados.map(m => `
+        <div class="p-4 flex flex-col border-b border-border-color active:bg-md-surface-container cursor-pointer transition" 
+             onclick="seleccionarMunicipio('${m.id_ine}')">
+          <span class="font-medium text-lg text-text-main">${m.nombre}</span>
+          <span class="text-sm text-text-muted">${m.provincia}</span>
+        </div>
+      `).join('');
+    });
+  }
+
+  window.seleccionarMunicipio = (ine) => {
+    searchModal.classList.add('hidden');
+    searchModal.classList.remove('flex');
+    searchInput.value = '';
+    searchResults.innerHTML = '';
+    btnGps.classList.remove('hidden');
+    
+    document.getElementById('ui-municipio').textContent = "Cargando...";
+    cargarTiempo(ine);
+  };
+
+  try {
+    const res = await fetch('municipios.json');
+    if (res.ok) {
+      municipiosDB = await res.json();
     }
-  </script>
-  <style>
-    body { background-color: theme('colors.md-surface'); font-family: system-ui, -apple-system, sans-serif; }
-    .material-symbols-rounded { font-variation-settings: 'FILL' 1; }
-    .no-scrollbar::-webkit-scrollbar { display: none; }
-    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-  </style>
-</head>
-<body class="text-slate-900 min-h-screen p-4 md:p-8 max-w-2xl mx-auto relative pb-24">
-
-  <!-- Top App Bar rediseñada -->
-  <header class="relative flex justify-center items-center mb-6 pt-2 h-12">
-    <!-- Logotipo / Nombre App (Izquierda) -->
-    <div class="absolute left-0 flex items-center gap-1.5 text-md-primary">
-      <span class="material-symbols-rounded text-3xl">routine</span>
-      <span class="font-bold text-lg tracking-tight hidden sm:block">Weather</span>
-    </div>
-    
-    <!-- Nombre de la Ciudad (Centrado) -->
-    <h1 id="ui-municipio" class="text-2xl font-medium tracking-tight truncate max-w-[180px] sm:max-w-xs text-center">
-      Cargando...
-    </h1>
-  </header>
-
-  <!-- Hero Card (Tiempo Actual) -->
-  <section class="bg-md-surface-container-high rounded-md-card p-6 mb-6 flex flex-col items-center justify-center shadow-sm">
-    <span id="ui-icono-actual" class="material-symbols-rounded text-6xl text-md-primary mb-2">cloud</span>
-    <div class="flex items-start">
-      <span id="ui-temp-actual" class="text-6xl font-normal tracking-tighter">--</span>
-      <span class="text-2xl mt-1">°</span>
-    </div>
-    <p id="ui-desc-actual" class="text-lg mt-1 font-medium capitalize">--</p>
-    <div class="flex gap-4 mt-4 text-sm font-medium text-slate-600">
-      <div class="flex items-center gap-1"><span class="material-symbols-rounded text-base">water_drop</span> <span id="ui-humedad">--%</span></div>
-      <div class="flex items-center gap-1"><span class="material-symbols-rounded text-base">air</span> <span id="ui-viento">-- km/h</span></div>
-    </div>
-  </section>
-
-  <!-- Carrusel Próximas Horas -->
-  <h2 class="text-sm font-semibold ml-2 mb-3 text-slate-600 uppercase tracking-wider">Próximas horas</h2>
-  <section id="ui-carrusel-horas" class="flex gap-3 overflow-x-auto no-scrollbar pb-2 mb-8 snap-x">
-  </section>
-
-  <!-- Lista Próximos Días -->
-  <h2 class="text-sm font-semibold ml-2 mb-3 text-slate-600 uppercase tracking-wider">Próximos días</h2>
-  <section id="ui-lista-dias" class="bg-md-surface-container rounded-md-card overflow-hidden mb-6">
-  </section>
-
-  <!-- Navegación Flotante Inferior (Floating Pill) -->
-  <nav class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white/80 backdrop-blur-lg shadow-lg border border-slate-200/50 rounded-full px-2 py-2 flex items-center gap-1 z-40">
-    <!-- Pestaña: Tiempo (Activa) -->
-    <button class="flex flex-col items-center justify-center w-20 py-1.5 bg-md-surface-container-high rounded-full transition">
-      <span class="material-symbols-rounded text-md-primary" style="font-variation-settings: 'FILL' 1;">partly_cloudy_day</span>
-      <span class="text-[10px] font-medium text-md-primary mt-1">Tiempo</span>
-    </button>
-    
-    <!-- Pestaña: Búsqueda -->
-    <button id="btn-search" class="flex flex-col items-center justify-center w-20 py-1.5 hover:bg-md-surface-container/50 rounded-full transition text-slate-500 hover:text-slate-800">
-      <span class="material-symbols-rounded" style="font-variation-settings: 'FILL' 0;">search</span>
-      <span class="text-[10px] font-medium mt-1">Buscar</span>
-    </button>
-    
-    <!-- Pestaña: Opciones -->
-    <button id="btn-options" class="flex flex-col items-center justify-center w-20 py-1.5 hover:bg-md-surface-container/50 rounded-full transition text-slate-500 hover:text-slate-800">
-      <span class="material-symbols-rounded" style="font-variation-settings: 'FILL' 0;">settings</span>
-      <span class="text-[10px] font-medium mt-1">Opciones</span>
-    </button>
-  </nav>
-
-  <!-- Modal de Búsqueda MD3 -->
-  <div id="search-modal" class="fixed inset-0 bg-md-surface z-50 hidden flex-col transition-opacity">
-    <div class="p-4 flex gap-3 items-center border-b border-slate-200/60 bg-md-surface">
-      <button id="btn-close-search" class="p-2 rounded-full hover:bg-md-surface-container transition flex items-center justify-center">
-        <span class="material-symbols-rounded text-slate-600">arrow_back</span>
-      </button>
-      <input type="text" id="search-input" placeholder="Buscar ciudad o código postal..." 
-             class="flex-1 bg-transparent text-lg outline-none placeholder:text-slate-400 text-slate-900" autocomplete="off">
-    </div>
-    
-    <!-- Botón GPS -->
-    <button id="btn-gps" class="w-full p-4 flex items-center gap-3 border-b border-slate-200/60 hover:bg-md-surface-container active:bg-md-surface-container transition text-left text-md-primary">
-      <span class="material-symbols-rounded" id="icono-gps">my_location</span>
-      <span class="font-medium text-lg" id="texto-gps">Usar mi ubicación actual</span>
-    </button>
-
-    <div id="search-results" class="flex-1 overflow-y-auto pb-24">
-    </div>
-  </div>
-
-  <script src="app.js"></script>
-</body>
-</html>
+  } catch (error) {
+    console.error("No se pudo cargar la base de datos de municipios", error);
+  }
+  
+  const savedIne = localStorage.getItem('saved_ine') || '07054';
+  cargarTiempo(savedIne);
+});
