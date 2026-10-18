@@ -44,11 +44,13 @@ function renderizarUI(data) {
     
     const row = document.createElement('div');
     row.className = 'flex justify-between items-center p-4 border-b border-border-color last:border-0';
+    
+    // Corregido: Ahora usa text-md-primary para que el % adquiera el color de tu tema actual
     row.innerHTML = `
       <span class="w-24 font-medium text-text-main">${dia.dia_semana}</span>
       <div class="flex items-center gap-1 w-16">
         <span class="material-symbols-rounded text-md-primary">${dia.icono}</span>
-        ${dia.prob_precipitacion > 0 ? `<span class="text-xs text-blue-600 font-bold">${dia.prob_precipitacion}%</span>` : ''}
+        ${dia.prob_precipitacion > 0 ? `<span class="text-xs text-md-primary font-bold">${dia.prob_precipitacion}%</span>` : ''}
       </div>
       <div class="flex gap-3 text-right w-24">
         <span class="font-medium text-text-main">${dia.temp_max}°</span>
@@ -88,6 +90,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const optionsPanel = document.getElementById('options-panel');
   const themeBtns = document.querySelectorAll('.theme-btn');
   const colorBtns = document.querySelectorAll('.color-btn');
+  const colorPicker = document.getElementById('custom-color-picker');
+  const customColorPreview = document.getElementById('custom-color-preview');
 
   /* --- LÓGICA DE BÚSQUEDA --- */
   if (btnSearch) {
@@ -200,7 +204,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     btnOptions.addEventListener('click', () => {
       optionsModal.classList.remove('hidden');
       optionsModal.classList.add('flex');
-      // Forzar reflow para que la animación funcione
       void optionsModal.offsetWidth;
       optionsOverlay.classList.remove('opacity-0');
       optionsPanel.classList.remove('translate-y-full');
@@ -221,7 +224,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     colorBtns.forEach(btn => {
-      const isActive = btn.dataset.colorVal === currentColor;
+      let isActive = false;
+      if (btn.dataset.colorVal === 'custom') {
+        isActive = currentColor.startsWith('#');
+        if (isActive) customColorPreview.style.background = currentColor;
+      } else {
+        isActive = btn.dataset.colorVal === currentColor;
+      }
+      
       btn.dataset.active = isActive ? 'true' : 'false';
       btn.querySelector('span').classList.toggle('opacity-0', !isActive);
     });
@@ -237,17 +247,37 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
-  // Cambio de Color
+  // Cambio de Color Predefinido
   colorBtns.forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const val = e.currentTarget.dataset.colorVal;
-      localStorage.setItem('app_color', val);
-      document.documentElement.setAttribute('data-color', val);
-      updateSettingsUI();
-    });
+    if (btn.dataset.colorVal !== 'custom') {
+      btn.addEventListener('click', (e) => {
+        const val = e.currentTarget.dataset.colorVal;
+        localStorage.setItem('app_color', val);
+        document.documentElement.setAttribute('data-color', val);
+        document.documentElement.style.removeProperty('--md-primary');
+        updateSettingsUI();
+      });
+    }
   });
 
-  // Iniciar configuración de interfaz
+  // Cambio de Color Personalizado Libre
+  if (colorPicker) {
+    // Si ya había un color guardado al cargar, ponlo en el selector
+    const savedColorInit = localStorage.getItem('app_color') || 'blue';
+    if (savedColorInit.startsWith('#')) {
+      colorPicker.value = savedColorInit;
+    }
+
+    colorPicker.addEventListener('input', (e) => {
+      const hex = e.target.value;
+      localStorage.setItem('app_color', hex);
+      document.documentElement.setAttribute('data-color', 'custom');
+      document.documentElement.style.setProperty('--md-primary', hex);
+      updateSettingsUI();
+    });
+  }
+
+  // Inicializar UI de settings visualmente correcta
   updateSettingsUI();
 
   /* --- INICIO DE DATOS --- */
