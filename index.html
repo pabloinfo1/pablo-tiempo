@@ -1,354 +1,227 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <!-- Viewport accesible sin bloqueo de zoom para Lighthouse -->
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pablómetro</title>
-  
-  <!-- Metadatos PWA & iOS -->
-  <meta name="theme-color" content="#0f172a">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Pablómetro">
-  <link rel="apple-touch-icon" href="favicon.png">
-  <link rel="icon" type="image/png" href="favicon.png" />
-  
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,1,0" rel="stylesheet" />
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap');
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-width=1.0">
+    <title>Pablómetro</title>
     
-    :root {
-      --md-surface: #f8fafc;
-      --md-surface-container: #f1f5f9;
-      --md-surface-container-high: #e2e8f0;
-      --md-primary: #1b6ef3;
-      --text-main: #0f172a;
-      --text-muted: #475569;
-      --border-color: rgba(226, 232, 240, 0.8);
-    }
-
-    @media (prefers-color-scheme: dark) {
-      :root:not([data-theme="light"]) {
-        --md-surface: #0f172a;
-        --md-surface-container: #1e293b;
-        --md-surface-container-high: #334155;
-        --md-primary: #6bb6ff; 
-        --text-main: #f8fafc;
-        --text-muted: #94a3b8;
-        --border-color: rgba(51, 65, 85, 0.8);
-      }
-    }
-    :root[data-theme="dark"] {
-      --md-surface: #0f172a;
-      --md-surface-container: #1e293b;
-      --md-surface-container-high: #334155;
-      --md-primary: #6bb6ff;
-      --text-main: #f8fafc;
-      --text-muted: #94a3b8;
-      --border-color: rgba(51, 65, 85, 0.8);
-    }
-
-    /* Colores predefinidos estáticos */
-    :root[data-color="blue"] { --md-primary: #1b6ef3; }
-    :root[data-color="blue"][data-theme="dark"] { --md-primary: #6bb6ff; }
-    @media (prefers-color-scheme: dark) { :root[data-color="blue"]:not([data-theme="light"]) { --md-primary: #6bb6ff; } }
+    <!-- Etiquetas Open Graph -->
+    <meta property="og:title" content="Pablómetro" />
+    <meta property="og:description" content="El tiempo oficial de la AEMET, pero con buen gusto. Una aplicación meteorológica ultraligera y minimalista." />
+    <meta property="og:image" content="favicon.png" />
     
-    :root[data-color="green"] { --md-primary: #386a20; }
-    :root[data-color="green"][data-theme="dark"] { --md-primary: #9cd67d; }
-    @media (prefers-color-scheme: dark) { :root[data-color="green"]:not([data-theme="light"]) { --md-primary: #9cd67d; } }
-
-    :root[data-color="orange"] { --md-primary: #ea580c; }
-    :root[data-color="orange"][data-theme="dark"] { --md-primary: #fb923c; }
-    @media (prefers-color-scheme: dark) { :root[data-color="orange"]:not([data-theme="light"]) { --md-primary: #fb923c; } }
-
-    :root[data-color="purple"] { --md-primary: #9333ea; }
-    :root[data-color="purple"][data-theme="dark"] { --md-primary: #c084fc; }
-    @media (prefers-color-scheme: dark) { :root[data-color="purple"]:not([data-theme="light"]) { --md-primary: #c084fc; } }
-
-    body { 
-      background-color: var(--md-surface); 
-      color: var(--text-main);
-      font-family: 'Google Sans', 'Product Sans', 'Outfit', system-ui, sans-serif;
-      /* Evita el zoom por doble toque sin penalizar accesibilidad */
-      touch-action: manipulation;
-      -webkit-tap-highlight-color: transparent;
-    }
-    .material-symbols-rounded { font-variation-settings: 'FILL' 1; }
-    .no-scrollbar::-webkit-scrollbar { display: none; }
-    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-  </style>
-
-  <script>
-    // Función global para ajustar el contraste del color personalizado en modo oscuro
-    window.adjustCustomColorContrast = function(hex, isDark) {
-      if (!isDark) return hex;
-      let r = parseInt(hex.slice(1, 3), 16) / 255;
-      let g = parseInt(hex.slice(3, 5), 16) / 255;
-      let b = parseInt(hex.slice(5, 7), 16) / 255;
-      let max = Math.max(r, g, b), min = Math.min(r, g, b);
-      let h, s, l = (max + min) / 2;
-
-      if (max === min) {
-        h = s = 0;
-      } else {
-        let d = max - min;
-        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-        switch (max) {
-          case r: h = (g - b) / d + (g < b ? 6 : 0); break;
-          case g: h = (b - r) / d + 2; break;
-          case b: h = (r - g) / d + 4; break;
+    <style>
+        :root {
+            --bg-color: #fbfdf8;
+            --surface: #f0f3eb;
+            --surface-high: #e9ece3;
+            --primary: #386a20;
+            --text-main: #1a1c18;
+            --text-muted: #43483e;
+            --border-radius: 16px;
         }
-        h /= 6;
-      }
 
-      // Si la luminosidad es baja (< 65%), la subimos para asegurar legibilidad sobre fondo oscuro
-      if (l < 0.65) l = 0.68;
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
 
-      const hue2rgb = (p, q, t) => {
-        if (t < 0) t += 1;
-        if (t > 1) t -= 1;
-        if (t < 1/6) return p + (q - p) * 6 * t;
-        if (t < 1/2) return q;
-        if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
-        return p;
-      };
-
-      let q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-      let p = 2 * l - q;
-      r = Math.round(hue2rgb(p, q, h + 1/3) * 255);
-      g = Math.round(hue2rgb(p, q, h) * 255);
-      b = Math.round(hue2rgb(p, q, h - 1/3) * 255);
-
-      return `#${(1 << 24 | r << 16 | g << 8 | b).toString(16).slice(1)}`;
-    };
-
-    window.applyCustomColor = function(hex) {
-      const currentTheme = localStorage.getItem('app_theme') || 'system';
-      const isDark = currentTheme === 'dark' || (currentTheme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-      const finalHex = window.adjustCustomColorContrast(hex, isDark);
-      document.documentElement.style.setProperty('--md-primary', finalHex);
-    };
-
-    // Inicialización de Tema y Color sin parpadeos
-    const savedTheme = localStorage.getItem('app_theme') || 'system';
-    const savedColor = localStorage.getItem('app_color') || 'blue';
-    
-    if (savedTheme !== 'system') document.documentElement.setAttribute('data-theme', savedTheme);
-    
-    if (savedColor.startsWith('#')) {
-      document.documentElement.setAttribute('data-color', 'custom');
-      window.applyCustomColor(savedColor);
-    } else {
-      document.documentElement.setAttribute('data-color', savedColor);
-    }
-
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            'md-surface': 'var(--md-surface)',
-            'md-surface-container': 'var(--md-surface-container)',
-            'md-surface-container-high': 'var(--md-surface-container-high)',
-            'md-primary': 'var(--md-primary)',
-            'text-main': 'var(--text-main)',
-            'text-muted': 'var(--text-muted)',
-            'border-color': 'var(--border-color)',
-          },
-          borderRadius: {
-            'md-card': '24px',
-          }
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            padding: 20px;
+            max-width: 600px;
+            margin: 0 auto;
         }
-      }
-    }
-  </script>
-</head>
-<body class="min-h-screen p-4 md:p-8 max-w-2xl mx-auto relative pb-28">
 
-  <!-- Toast de Notificaciones (Sustituye a los alert nativos) -->
-  <div id="toast-notification" class="fixed top-5 left-1/2 -translate-x-1/2 z-[70] bg-md-surface-container-high border border-border-color text-text-main px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 transition-all duration-300 opacity-0 -translate-y-4 pointer-events-none max-w-[90vw]">
-    <span id="toast-icon" class="material-symbols-rounded text-md-primary shrink-0">info</span>
-    <span id="toast-message" class="text-sm font-medium">Mensaje</span>
-  </div>
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start; /* Alineado arriba por si el texto ocupa varias líneas */
+            margin-bottom: 30px;
+        }
 
-  <header class="relative flex justify-center items-center mb-6 pt-2 h-12">
-    <div class="absolute left-0 flex items-center text-md-primary">
-      <img src="favicon.png" alt="Logo" class="w-8 h-8 rounded-lg object-contain">
-    </div>
-    
-    <h1 id="ui-municipio" class="text-2xl font-medium tracking-tight truncate max-w-[200px] sm:max-w-xs text-center">
-      Cargando...
-    </h1>
-  </header>
+        /* Título sin truncar */
+        #location-name {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--primary);
+            white-space: normal; /* Permite saltos de línea */
+            word-wrap: break-word;
+            line-height: 1.2;
+            flex: 1;
+            padding-right: 15px;
+        }
 
-  <!-- Contenedor principal con soporte para Skeleton de carga -->
-  <main id="weather-content" class="transition-opacity duration-300">
-    <section class="bg-md-surface-container-high rounded-md-card p-6 mb-6 flex flex-col items-center justify-center shadow-sm">
-      <span id="ui-icono-actual" class="material-symbols-rounded text-6xl text-md-primary mb-2">cloud</span>
-      <div class="flex items-start">
-        <span id="ui-temp-actual" class="text-6xl font-normal tracking-tighter">--</span>
-        <span class="text-2xl mt-1">°</span>
-      </div>
-      <p id="ui-desc-actual" class="text-lg mt-1 font-medium capitalize text-center">--</p>
-      <div class="flex gap-4 mt-4 text-sm font-medium text-text-muted">
-        <div class="flex items-center gap-1"><span class="material-symbols-rounded text-base">water_drop</span> <span id="ui-humedad">--%</span></div>
-        <div class="flex items-center gap-1"><span class="material-symbols-rounded text-base">air</span> <span id="ui-viento">-- km/h</span></div>
-      </div>
-    </section>
+        button.icon-btn {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--primary);
+            padding: 5px;
+        }
 
-    <h2 class="text-sm font-semibold ml-2 mb-3 text-text-muted uppercase tracking-wider">Próximas horas</h2>
-    <section id="ui-carrusel-horas" class="flex gap-3 overflow-x-auto no-scrollbar pb-2 mb-8 snap-x">
-    </section>
+        h2 { font-size: 1.2rem; margin-bottom: 15px; color: var(--text-muted); }
 
-    <h2 class="text-sm font-semibold ml-2 mb-3 text-text-muted uppercase tracking-wider">Próximos días</h2>
-    <section id="ui-lista-dias" class="bg-md-surface-container rounded-md-card overflow-hidden mb-6">
-    </section>
-  </main>
+        /* Contenedor scroll horizontal para horas */
+        .hourly-scroll {
+            display: flex;
+            overflow-x: auto;
+            gap: 12px;
+            padding-bottom: 10px;
+            scrollbar-width: none;
+        }
+        .hourly-scroll::-webkit-scrollbar { display: none; }
 
-  <!-- Píldora de Navegación -->
-  <nav class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-md-surface/80 backdrop-blur-lg shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-border-color rounded-full p-1.5 flex items-center gap-1 z-40">
-    <button id="btn-tiempo" class="flex items-center gap-2 px-5 py-2.5 bg-md-surface-container-high rounded-full transition">
-      <span class="material-symbols-rounded text-[22px] text-md-primary" style="font-variation-settings: 'FILL' 1;">partly_cloudy_day</span>
-      <span class="text-sm font-semibold text-md-primary">Tiempo</span>
-    </button>
-    <button id="btn-search" class="flex items-center gap-2 px-5 py-2.5 hover:bg-md-surface-container/50 rounded-full transition text-text-muted hover:text-text-main">
-      <span class="material-symbols-rounded text-[22px]" style="font-variation-settings: 'FILL' 0;">search</span>
-      <span class="text-sm font-semibold">Buscar</span>
-    </button>
-    <button id="btn-options" class="flex items-center gap-2 px-5 py-2.5 hover:bg-md-surface-container/50 rounded-full transition text-text-muted hover:text-text-main">
-      <span class="material-symbols-rounded text-[22px]" style="font-variation-settings: 'FILL' 0;">settings</span>
-      <span class="text-sm font-semibold">Opciones</span>
-    </button>
-  </nav>
+        .hourly-card {
+            background: var(--surface);
+            padding: 15px;
+            border-radius: var(--border-radius);
+            min-width: 85px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
 
-  <!-- Modal de Búsqueda -->
-  <div id="search-modal" class="fixed inset-0 bg-md-surface z-50 hidden flex-col transition-opacity">
-    <div class="p-4 flex gap-3 items-center border-b border-border-color bg-md-surface">
-      <button id="btn-close-search" class="p-2 rounded-full hover:bg-md-surface-container transition flex items-center justify-center">
-        <span class="material-symbols-rounded text-text-muted">arrow_back</span>
-      </button>
-      <input type="text" id="search-input" placeholder="Buscar ciudad o código postal..." 
-             class="flex-1 bg-transparent text-lg outline-none placeholder:text-text-muted text-text-main" autocomplete="off">
-    </div>
-    <button id="btn-gps" class="w-full p-4 flex items-center gap-3 border-b border-border-color hover:bg-md-surface-container active:bg-md-surface-container transition text-left text-md-primary">
-      <span class="material-symbols-rounded" id="icono-gps">my_location</span>
-      <span class="font-medium text-lg" id="texto-gps">Usar mi ubicación actual</span>
-    </button>
-    <div id="search-results" class="flex-1 overflow-y-auto pb-24">
-    </div>
-  </div>
+        .hourly-time { font-weight: 600; }
+        .hourly-temp { font-size: 1.2rem; font-weight: bold; }
+        .hourly-precip { font-size: 0.85rem; color: #0066cc; }
 
-  <!-- Modal de Opciones (Bottom Sheet) -->
-  <div id="options-modal" class="fixed inset-0 z-50 hidden justify-center items-end">
-    <div id="options-overlay" class="absolute inset-0 bg-black/50 opacity-0 transition-opacity duration-300"></div>
-    
-    <div id="options-panel" class="relative bg-md-surface w-full max-w-2xl rounded-t-3xl p-6 pb-10 shadow-2xl transform translate-y-full transition-transform duration-300 flex flex-col gap-6 max-h-[90vh] overflow-y-auto">
-      <div class="w-12 h-1.5 bg-border-color rounded-full mx-auto mb-1 shrink-0"></div>
-      
-      <h3 class="text-xl font-semibold text-text-main">Ajustes</h3>
-      
-      <!-- Selector de Tema -->
-      <div>
-        <p class="text-sm font-medium text-text-muted mb-3">TEMA</p>
-        <div class="flex gap-2 bg-md-surface-container p-1.5 rounded-2xl">
-          <button class="theme-btn flex-1 py-2 text-sm font-medium rounded-xl transition data-[active=true]:bg-md-surface data-[active=true]:text-md-primary data-[active=true]:shadow-sm" data-theme-val="system">Sistema</button>
-          <button class="theme-btn flex-1 py-2 text-sm font-medium rounded-xl transition data-[active=true]:bg-md-surface data-[active=true]:text-md-primary data-[active=true]:shadow-sm" data-theme-val="light">Claro</button>
-          <button class="theme-btn flex-1 py-2 text-sm font-medium rounded-xl transition data-[active=true]:bg-md-surface data-[active=true]:text-md-primary data-[active=true]:shadow-sm" data-theme-val="dark">Oscuro</button>
-        </div>
-      </div>
+        /* Datos extra minimalistas */
+        .extra-data-container {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid var(--surface-high);
+            width: 100%;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-align: left;
+        }
 
-      <!-- Selector de Color -->
-      <div>
-        <p class="text-sm font-medium text-text-muted mb-3">COLOR PRINCIPAL</p>
-        <div class="flex gap-4">
-          <button class="color-btn group w-12 h-12 rounded-full bg-[#1b6ef3] flex items-center justify-center transition border-2 border-transparent data-[active=true]:border-text-main" data-color-val="blue">
-            <span class="material-symbols-rounded text-white opacity-0 group-data-[active=true]:opacity-100 transition-opacity">check</span>
-          </button>
-          <button class="color-btn group w-12 h-12 rounded-full bg-[#386a20] flex items-center justify-center transition border-2 border-transparent data-[active=true]:border-text-main" data-color-val="green">
-            <span class="material-symbols-rounded text-white opacity-0 group-data-[active=true]:opacity-100 transition-opacity">check</span>
-          </button>
-          <button class="color-btn group w-12 h-12 rounded-full bg-[#ea580c] flex items-center justify-center transition border-2 border-transparent data-[active=true]:border-text-main" data-color-val="orange">
-            <span class="material-symbols-rounded text-white opacity-0 group-data-[active=true]:opacity-100 transition-opacity">check</span>
-          </button>
-          <button class="color-btn group w-12 h-12 rounded-full bg-[#9333ea] flex items-center justify-center transition border-2 border-transparent data-[active=true]:border-text-main" data-color-val="purple">
-            <span class="material-symbols-rounded text-white opacity-0 group-data-[active=true]:opacity-100 transition-opacity">check</span>
-          </button>
-          <!-- Selector Libre (Custom) -->
-          <div class="relative w-12 h-12">
-            <input type="color" id="custom-color-picker" class="opacity-0 absolute inset-0 w-full h-full cursor-pointer z-10" />
-            <button class="color-btn group w-full h-full rounded-full flex items-center justify-center transition border-2 border-transparent data-[active=true]:border-text-main overflow-hidden relative" data-color-val="custom">
-              <div id="custom-color-preview" class="absolute inset-0 bg-gradient-to-br from-pink-500 via-red-500 to-yellow-500"></div>
-              <span class="material-symbols-rounded text-white relative z-0 opacity-0 group-data-[active=true]:opacity-100 transition-opacity drop-shadow-md">check</span>
-            </button>
-          </div>
-        </div>
-      </div>
+        .extra-item { display: flex; justify-content: space-between; gap: 8px; }
 
-      <!-- Apartado PWA: Instalar Aplicación -->
-      <div id="pwa-install-section">
-        <p class="text-sm font-medium text-text-muted mb-3">APLICACIÓN</p>
-        <button id="btn-install-pwa" class="w-full py-3.5 px-4 bg-md-surface-container-high hover:bg-md-surface-container transition rounded-2xl flex items-center justify-between text-text-main font-medium">
-          <div class="flex items-center gap-3">
-            <span class="material-symbols-rounded text-md-primary">install_mobile</span>
-            <span>Instalar aplicación (PWA)</span>
-          </div>
-          <span class="material-symbols-rounded text-text-muted text-xl">chevron_right</span>
-        </button>
-      </div>
+        /* Días clickables */
+        .daily-list { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
+        .daily-card {
+            background: var(--surface);
+            padding: 15px 20px;
+            border-radius: var(--border-radius);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .daily-card:hover { background: var(--surface-high); }
 
-      <!-- Botones Inferiores -->
-      <div class="mt-1 flex flex-col gap-3">
-        <div class="flex gap-3">
-          <a href="mailto:pabloinfo1@gmail.com" class="flex-1 py-3 bg-md-surface-container-high hover:bg-md-surface-container transition rounded-2xl flex items-center justify-center gap-2 text-text-main font-medium">
-            <span class="material-symbols-rounded text-md-primary">mail</span>
-            Contactar
-          </a>
-          <a href="https://www.instagram.com/pabloinfo1/" target="_blank" rel="noopener noreferrer" class="flex-1 py-3 bg-md-surface-container-high hover:bg-md-surface-container transition rounded-2xl flex items-center justify-center gap-2 text-text-main font-medium">
-            <span class="material-symbols-rounded text-md-primary">photo_camera</span>
-            Instagram
-          </a>
-        </div>
+        /* Modal/Menús */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: flex; justify-content: center; align-items: flex-end;
+            opacity: 0; pointer-events: none; transition: opacity 0.3s;
+            z-index: 100;
+        }
+        .modal-overlay.active { opacity: 1; pointer-events: auto; }
         
-        <button id="btn-privacy" class="w-full py-3 bg-md-surface-container-high hover:bg-md-surface-container transition rounded-2xl flex items-center justify-center gap-2 text-text-main font-medium">
-          <span class="material-symbols-rounded text-md-primary">cookie</span>
-          Privacidad y cookies
-        </button>
-      </div>
+        .modal-content {
+            background: var(--bg-color);
+            width: 100%; max-width: 600px;
+            border-radius: 24px 24px 0 0;
+            padding: 25px;
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            max-height: 85vh;
+            overflow-y: auto;
+        }
+        .modal-overlay.active .modal-content { transform: translateY(0); }
+
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .close-btn { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-muted); }
+
+        /* Estilos Menú Ajustes */
+        .settings-option {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 0; border-bottom: 1px solid var(--surface-high);
+        }
+        .settings-btn {
+            display: block; width: 100%; padding: 15px; margin-top: 20px;
+            background: var(--surface); color: var(--text-main);
+            text-align: center; text-decoration: none; font-weight: 600;
+            border-radius: 12px; transition: background 0.2s;
+        }
+        .settings-btn:hover { background: var(--surface-high); }
+
+        /* Toggle Switch CSS minimalista */
+        .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #ccc; transition: .4s; border-radius: 24px;
+        }
+        .slider:before {
+            position: absolute; content: ""; height: 18px; width: 18px;
+            left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%;
+        }
+        input:checked + .slider { background-color: var(--primary); }
+        input:checked + .slider:before { transform: translateX(20px); }
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1 id="location-name">Cargando ubicación...</h1>
+        <button id="btn-settings" class="icon-btn">⚙️</button>
+    </header>
+
+    <main>
+        <section>
+            <h2>Próximas horas</h2>
+            <div id="upcoming-hours" class="hourly-scroll">
+                <!-- Se inyectará por JS -->
+            </div>
+        </section>
+
+        <section>
+            <div class="daily-list" id="next-days">
+                <h2>Próximos días</h2>
+                <!-- Se inyectará por JS -->
+            </div>
+        </section>
+    </main>
+
+    <!-- Modal Detalles del Día -->
+    <div id="modal-day" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-day-title">Detalle del día</h2>
+                <button class="close-btn" onclick="closeModal('modal-day')">✕</button>
+            </div>
+            <div id="modal-day-hours" class="hourly-scroll">
+                <!-- Horas del día clickado inyectadas por JS -->
+            </div>
+        </div>
     </div>
-  </div>
 
-  <!-- Modal Guía de Instalación para iOS -->
-  <div id="ios-pwa-modal" class="fixed inset-0 z-[60] hidden items-center justify-center p-4 bg-black/60 backdrop-blur-sm opacity-0 transition-opacity duration-300">
-    <div class="bg-md-surface border border-border-color rounded-3xl p-6 max-w-sm w-full shadow-2xl flex flex-col gap-4">
-      <div class="flex justify-between items-center">
-        <div class="flex items-center gap-2">
-          <span class="material-symbols-rounded text-md-primary">phone_iphone</span>
-          <h4 class="text-lg font-semibold text-text-main">Instalar en iPhone / iPad</h4>
+    <!-- Modal Ajustes -->
+    <div id="modal-settings" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Opciones de visualización</h2>
+                <button class="close-btn" onclick="closeModal('modal-settings')">✕</button>
+            </div>
+            <div id="settings-container">
+                <!-- Toggles inyectados por JS -->
+            </div>
+            
+            <a href="https://www.aemet.es" target="_blank" class="settings-btn">Datos obtenidos de AEMET</a>
         </div>
-        <button id="btn-close-ios-modal" class="p-1.5 rounded-full hover:bg-md-surface-container text-text-muted flex items-center justify-center">
-          <span class="material-symbols-rounded">close</span>
-        </button>
-      </div>
-      <p class="text-sm text-text-muted">Apple no permite un botón directo, pero puedes instalarla en 2 pasos desde Safari:</p>
-      
-      <div class="flex flex-col gap-3 bg-md-surface-container p-4 rounded-2xl text-sm">
-        <div class="flex items-center gap-3">
-          <span class="w-7 h-7 rounded-full bg-md-surface-container-high text-md-primary font-bold flex items-center justify-center shrink-0">1</span>
-          <span class="text-text-main">Pulsa el botón <strong>Compartir</strong> <span class="material-symbols-rounded align-middle text-md-primary text-lg">ios_share</span> en la barra de Safari.</span>
-        </div>
-        <div class="flex items-center gap-3">
-          <span class="w-7 h-7 rounded-full bg-md-surface-container-high text-md-primary font-bold flex items-center justify-center shrink-0">2</span>
-          <span class="text-text-main">Desliza y selecciona <strong>«Añadir a pantalla de inicio»</strong> <span class="material-symbols-rounded align-middle text-md-primary text-lg">add_box</span>.</span>
-        </div>
-      </div>
-
-      <button id="btn-ok-ios-modal" class="w-full py-3 bg-md-primary text-white font-semibold rounded-2xl mt-1 active:scale-[0.98] transition">
-        Entendido
-      </button>
     </div>
-  </div>
 
-  <script src="app.js"></script>
+    <script src="app.js"></script>
 </body>
 </html>
