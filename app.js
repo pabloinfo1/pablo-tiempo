@@ -32,7 +32,7 @@ function renderizarUI(data) {
     card.innerHTML = `
       <span class="text-xs font-medium mb-2">${hora.hora}</span>
       <span class="material-symbols-rounded text-3xl text-md-primary mb-2">${hora.icono}</span>
-      <span class="text-lg font-medium">${hora.temperatura}°</span>
+      <span class="text-lg font-medium text-text-main">${hora.temperatura}°</span>
     `;
     carrusel.appendChild(card);
   });
@@ -43,23 +43,22 @@ function renderizarUI(data) {
     if (index === 0) return; 
     
     const row = document.createElement('div');
-    row.className = 'flex justify-between items-center p-4 border-b border-slate-200/50 last:border-0';
+    row.className = 'flex justify-between items-center p-4 border-b border-border-color last:border-0';
     row.innerHTML = `
-      <span class="w-24 font-medium text-slate-700">${dia.dia_semana}</span>
+      <span class="w-24 font-medium text-text-main">${dia.dia_semana}</span>
       <div class="flex items-center gap-1 w-16">
         <span class="material-symbols-rounded text-md-primary">${dia.icono}</span>
         ${dia.prob_precipitacion > 0 ? `<span class="text-xs text-blue-600 font-bold">${dia.prob_precipitacion}%</span>` : ''}
       </div>
       <div class="flex gap-3 text-right w-24">
-        <span class="font-medium">${dia.temp_max}°</span>
-        <span class="text-slate-500">${dia.temp_min}°</span>
+        <span class="font-medium text-text-main">${dia.temp_max}°</span>
+        <span class="text-text-muted">${dia.temp_min}°</span>
       </div>
     `;
     lista.appendChild(row);
   });
 }
 
-// Algoritmo de Haversine para distancia entre dos coordenadas
 function calcularDistancia(lat1, lon1, lat2, lon2) {
   const R = 6371; 
   const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -99,7 +98,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // Lógica del botón GPS
   if (btnGps) {
     btnGps.addEventListener('click', () => {
       if (!navigator.geolocation) {
@@ -107,7 +105,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
 
-      // Estado de carga
       iconoGps.textContent = 'sync';
       iconoGps.classList.add('animate-spin');
       textoGps.textContent = 'Buscando tu zona...';
@@ -119,7 +116,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         let municipioMasCercano = null;
         let distanciaMinima = Infinity;
 
-        // Buscar el municipio más cercano iterando el array en memoria
         municipiosDB.forEach(m => {
           if (m.lat && m.lon) {
             const dist = calcularDistancia(userLat, userLon, m.lat, m.lon);
@@ -130,7 +126,6 @@ document.addEventListener('DOMContentLoaded', async () => {
           }
         });
 
-        // Restaurar estado del botón
         iconoGps.textContent = 'my_location';
         iconoGps.classList.remove('animate-spin');
         textoGps.textContent = 'Usar mi ubicación actual';
@@ -153,7 +148,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     searchInput.addEventListener('input', (e) => {
       const query = e.target.value.toLowerCase().trim();
       
-      // Ocultar botón GPS si el usuario está escribiendo
       if (query.length > 0) {
         btnGps.classList.add('hidden');
       } else {
@@ -177,10 +171,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       }).slice(0, 15); 
       
       searchResults.innerHTML = filtrados.map(m => `
-        <div class="p-4 flex flex-col border-b border-slate-100 active:bg-md-surface-container cursor-pointer transition" 
+        <div class="p-4 flex flex-col border-b border-border-color active:bg-md-surface-container cursor-pointer transition" 
              onclick="seleccionarMunicipio('${m.id_ine}')">
-          <span class="font-medium text-lg text-slate-800">${m.nombre}</span>
-          <span class="text-sm text-slate-500">${m.provincia}</span>
+          <span class="font-medium text-lg text-text-main">${m.nombre}</span>
+          <span class="text-sm text-text-muted">${m.provincia}</span>
         </div>
       `).join('');
     });
