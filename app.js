@@ -27,10 +27,59 @@ function cargarPreferenciasAvanzadas() {
 
 let advPrefs = cargarPreferenciasAvanzadas();
 
-/* --- UTILIDADES --- */
+/* --- UTILIDADES Y REPARACIÓN DE CODIFICACIÓN (MOJIBAKE iOS/AEMET) --- */
+/**
+ * Repara cadenas UTF-8 que fueron leídas erróneamente como ISO-8859-1 / Windows-1252
+ * (ej. "Santa EulÃ ria des Riu" -> "Santa Eulària des Riu").
+ */
+function repararTextoMojibake(str) {
+  if (typeof str !== 'string') return str;
+  if (!/[ÃÂâ]/.test(str)) return str;
+  try {
+    const bytes = new Uint8Array(str.length);
+    for (let i = 0; i < str.length; i++) {
+      const code = str.charCodeAt(i);
+      if (code > 255) return str;
+      bytes[i] = code;
+    }
+    const decodificado = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    return decodificado;
+  } catch (e) {
+    return str;
+  }
+}
+
+function sanitizarObjetoTexto(obj) {
+  if (typeof obj === 'string') return repararTextoMojibake(obj);
+  if (Array.isArray(obj)) return obj.map(sanitizarObjetoTexto);
+  if (obj && typeof obj === 'object') {
+    const limpio = {};
+    for (const [k, v] of Object.entries(obj)) {
+      limpio[k] = sanitizarObjetoTexto(v);
+    }
+    return limpio;
+  }
+  return obj;
+}
+
+function obtenerNombreMunicipioLimpio(data) {
+  const ineActual = String(data?.municipio?.id_ine || localStorage.getItem('saved_ine') || '').padStart(5, '0');
+  if (municipiosDB.length > 0 && ineActual) {
+    const encontrado = municipiosDB.find(m => String(m.id_ine).padStart(5, '0') === ineActual);
+    if (encontrado && encontrado.nombre) {
+      return repararTextoMojibake(encontrado.nombre);
+    }
+  }
+  return repararTextoMojibake(data?.municipio?.nombre || 'Localidad');
+}
+
 function normalizarTexto(str) {
   if (!str) return '';
-  return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  return repararTextoMojibake(String(str))
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
 }
 
 function primerValorDefinido(...valores) {
@@ -42,7 +91,6 @@ function primerValorDefinido(...valores) {
 
 /**
  * Parsea la precipitación acumulada en mm (l/m²) sin confundirla nunca con porcentaje.
- * Soporta "Ip" (Inapreciable) de AEMET convirtiéndolo en 0.1 mm.
  */
 function parsearPrecipitacionMm(valorRaw) {
   if (valorRaw === undefined || valorRaw === null || valorRaw === '') return 0;
@@ -118,6 +166,50 @@ function setEstadoCarga(cargando) {
   } else {
     content.classList.remove('animate-pulse', 'opacity-50', 'pointer-events-none');
   }
+}
+
+/* --- BLOQUEO DE ZOOM POR DOBLE TOQUE Y PINCH EN iOS --- */
+function bloquearZoomIOS() {
+  let lastTouchEnd = 0;
+  document.addEventListener('touchend', (event) => {
+    const now = Date.now();
+    if (now - lastTouchEnd <= 300) {
+      event.preventDefault();
+    }
+    lastTouchEnd = now;
+  }, { passive: false });
+
+  document.addEventListener('gesturestart', (event) => {
+    event.preventDefault();
+  }, { passive: false });
+}
+
+bloquearZoomIOS();
+
+/* --- NAVEGACIÓN INFERIOR DINÁMICA --- */
+function actualizarBarraNavegacion(seccionActiva = 'tiempo') {
+  const mapaBotones = {
+    tiempo: document.getElementById('btn-tiempo'),
+    buscar: document.getElementById('btn-search'),
+    opciones: document.getElementById('btn-options')
+  };
+
+  Object.entries(mapaBotones).forEach(([clave, btn]) => {
+    if (!btn) return;
+    const icon = btn.querySelector('.nav-icon');
+    const label = btn.querySelector('.nav-label');
+    const activo = clave === seccionActiva;
+
+    if (activo) {
+      btn.className = 'nav-btn flex items-center justify-center gap-2 px-5 py-2.5 bg-md-surface-container-high rounded-full transition-all duration-200 text-md-primary';
+      if (icon) icon.style.fontVariationSettings = "'FILL' 1";
+      if (label) label.classList.remove('hidden');
+    } else {
+      btn.className = 'nav-btn flex items-center justify-center p-2.5 hover:bg-md-surface-container/50 rounded-full transition-all duration-200 text-text-muted hover:text-text-main';
+      if (icon) icon.style.fontVariationSettings = "'FILL' 0";
+      if (label) label.classList.add('hidden');
+    }
+  });
 }
 
 /* --- CONFIGURACIÓN PWA --- */
@@ -218,16 +310,11 @@ function obtenerHorasParaDia(data, diaObj, indexEnLista) {
   return [];
 }
 
-/**
- * Sincroniza la lista de próximas horas y los datos actuales con el reloj local del usuario,
- * descartando horas ya pasadas aunque el JSON provenga de la caché de 30 minutos.
- */
 function obtenerEstadoSincronizado(data) {
   const ahora = new Date();
   const fechaHoyISO = obtenerFechaLocalISO(ahora);
   const horaActualNum = ahora.getHours();
 
-  // Reunir todas las horas disponibles en secuencia cronológica
   let poolHoras = [];
   if (Array.isArray(data.hoy_horas) && data.hoy_horas.length > 0) {
     poolHoras = [...data.hoy_horas];
@@ -255,7 +342,6 @@ function obtenerEstadoSincronizado(data) {
         return false;
       });
     } else {
-      // Si el JSON no trae campo fecha en cada hora, agrupamos por saltos de medianoche (00:00)
       const grupos = agruparHorasPorSaltosDeDia(poolHoras);
       const grupoHoy = (grupos[0] || []).filter(h => {
         const horaNum = extraerNumeroHora(h.hora);
@@ -274,7 +360,6 @@ function obtenerEstadoSincronizado(data) {
   const horaEnCurso = proximas24Horas[0] || {};
   const baseActual = data.actual || {};
 
-  // Sincronizar tarjeta principal con la hora actual real
   const actualSincronizado = {
     ...baseActual,
     hora: primerValorDefinido(horaEnCurso.hora, baseActual.hora),
@@ -358,9 +443,55 @@ function extraerDatosAvanzadosActuales(data, actualSincronizado) {
   return { uv, nieveRaw, tormenta, sensacion, racha, direccion };
 }
 
-/**
- * Recopila y normaliza todas las alertas meteorológicas presentes en la respuesta.
- */
+/* --- ALERTAS Y MODAL DETALLADO DE AVISOS --- */
+function obtenerEstilosNivelAlerta(nivelRaw) {
+  const nivelNorm = normalizarTexto(nivelRaw);
+  if (nivelNorm.includes('roj')) {
+    return {
+      etiqueta: 'Aviso Rojo · Riesgo Extremo',
+      etiquetaCorta: 'Aviso Rojo',
+      badgeStyle: 'background-color: rgba(239, 68, 68, 0.18); border: 1px solid rgba(239, 68, 68, 0.5); color: #ef4444;',
+      iconWrapStyle: 'background-color: rgba(239, 68, 68, 0.18); color: #ef4444;',
+      descripcionFallback: 'Riesgo meteorológico extremo (fenómenos no habituales de intensidad excepcional). Se recomienda extremar la precaución y seguir las indicaciones oficiales.'
+    };
+  }
+  if (nivelNorm.includes('naranj')) {
+    return {
+      etiqueta: 'Aviso Naranja · Riesgo Importante',
+      etiquetaCorta: 'Aviso Naranja',
+      badgeStyle: 'background-color: rgba(249, 115, 22, 0.18); border: 1px solid rgba(249, 115, 22, 0.5); color: #f97316;',
+      iconWrapStyle: 'background-color: rgba(249, 115, 22, 0.18); color: #f97316;',
+      descripcionFallback: 'Riesgo meteorológico importante. Existe un grado de peligro para las actividades usuales en la zona afectada.'
+    };
+  }
+  if (nivelNorm.includes('amarill')) {
+    return {
+      etiqueta: 'Aviso Amarillo · Riesgo',
+      etiquetaCorta: 'Aviso Amarillo',
+      badgeStyle: 'background-color: rgba(234, 179, 8, 0.18); border: 1px solid rgba(234, 179, 8, 0.5); color: #eab308;',
+      iconWrapStyle: 'background-color: rgba(234, 179, 8, 0.18); color: #eab308;',
+      descripcionFallback: 'No existe riesgo meteorológico para la población en general, aunque sí para alguna actividad concreta expuesta al fenómeno.'
+    };
+  }
+  if (nivelNorm.includes('especial')) {
+    return {
+      etiqueta: 'Aviso Especial AEMET',
+      etiquetaCorta: 'Aviso Especial',
+      badgeStyle: 'background-color: rgba(168, 85, 247, 0.18); border: 1px solid rgba(168, 85, 247, 0.5); color: #c084fc;',
+      iconWrapStyle: 'background-color: rgba(168, 85, 247, 0.18); color: #c084fc;',
+      descripcionFallback: 'Episodio meteorológico adverso destacado emitido por la Agencia Estatal de Meteorología.'
+    };
+  }
+  const limpio = String(nivelRaw || 'Activo');
+  return {
+    etiqueta: limpio.toLowerCase().startsWith('aviso') ? limpio : `Aviso ${limpio}`,
+    etiquetaCorta: limpio.toLowerCase().startsWith('aviso') ? limpio : `Aviso ${limpio}`,
+    badgeStyle: 'background-color: rgba(59, 130, 246, 0.16); border: 1px solid rgba(59, 130, 246, 0.45); color: var(--md-primary);',
+    iconWrapStyle: 'background-color: rgba(59, 130, 246, 0.16); color: var(--md-primary);',
+    descripcionFallback: 'Aviso meteorológico oficial activo para este municipio o zona.'
+  };
+}
+
 function extraerAlertasActivas(data) {
   if (!data) return [];
   const fuentes = [
@@ -397,11 +528,86 @@ function extraerAlertasActivas(data) {
     const clave = `${normalizarTexto(nivel)}-${normalizarTexto(fenomeno)}`;
     if (!vistas.has(clave)) {
       vistas.add(clave);
-      alertasLimpias.push({ nivel, fenomeno, descripcion });
+      alertasLimpias.push({
+        nivel: repararTextoMojibake(String(nivel)),
+        fenomeno: repararTextoMojibake(String(fenomeno)),
+        descripcion: repararTextoMojibake(String(descripcion))
+      });
     }
   });
 
   return alertasLimpias;
+}
+
+function abrirModalAlerta(alertaPrincipal, todasLasAlertas = []) {
+  const modal = document.getElementById('alert-modal');
+  const panel = document.getElementById('alert-modal-panel');
+  const iconWrap = document.getElementById('alert-modal-icon-wrap');
+  const badge = document.getElementById('alert-modal-badge');
+  const title = document.getElementById('alert-modal-title');
+  const municipioEl = document.getElementById('alert-modal-municipio');
+  const descEl = document.getElementById('alert-modal-desc');
+  const otherContainer = document.getElementById('alert-modal-list-container');
+  const otherList = document.getElementById('alert-modal-other-list');
+
+  if (!modal || !alertaPrincipal) return;
+
+  const estilos = obtenerEstilosNivelAlerta(alertaPrincipal.nivel);
+  iconWrap.style.cssText = estilos.iconWrapStyle;
+  badge.style.cssText = estilos.badgeStyle;
+  badge.textContent = estilos.etiqueta;
+
+  title.textContent = alertaPrincipal.fenomeno || estilos.etiquetaCorta;
+  municipioEl.textContent = obtenerNombreMunicipioLimpio(currentWeatherData);
+  descEl.textContent = alertaPrincipal.descripcion || estilos.descripcionFallback;
+
+  const otras = todasLasAlertas.filter(a => a !== alertaPrincipal);
+  if (otras.length > 0 && otherContainer && otherList) {
+    otherContainer.classList.remove('hidden');
+    otherContainer.classList.add('flex');
+    otherList.innerHTML = '';
+
+    otras.forEach(otra => {
+      const estOtra = obtenerEstilosNivelAlerta(otra.nivel);
+      const itemBtn = document.createElement('button');
+      itemBtn.type = 'button';
+      itemBtn.className = 'w-full text-left p-3 rounded-2xl bg-md-surface-container hover:bg-md-surface-container-high transition flex items-center justify-between gap-2 border border-border-color/50';
+      itemBtn.innerHTML = `
+        <div class="flex items-center gap-2.5 min-w-0">
+          <span class="material-symbols-rounded text-[18px] shrink-0" style="color: ${estOtra.badgeStyle.split('color:')[1] || 'var(--md-primary)'}">warning</span>
+          <div class="flex flex-col min-w-0">
+            <span class="text-xs font-bold text-text-main truncate">${estOtra.etiquetaCorta}${otra.fenomeno ? ` · ${otra.fenomeno}` : ''}</span>
+            <span class="text-xs text-text-muted truncate">${otra.descripcion || estOtra.descripcionFallback}</span>
+          </div>
+        </div>
+        <span class="material-symbols-rounded text-text-muted text-base shrink-0">chevron_right</span>
+      `;
+      itemBtn.addEventListener('click', () => abrirModalAlerta(otra, todasLasAlertas));
+      otherList.appendChild(itemBtn);
+    });
+  } else if (otherContainer) {
+    otherContainer.classList.add('hidden');
+    otherContainer.classList.remove('flex');
+  }
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  void modal.offsetWidth;
+  modal.classList.remove('opacity-0');
+  if (panel) panel.classList.remove('scale-95');
+}
+
+function cerrarModalAlerta() {
+  const modal = document.getElementById('alert-modal');
+  const panel = document.getElementById('alert-modal-panel');
+  if (!modal || modal.classList.contains('hidden')) return;
+
+  modal.classList.add('opacity-0');
+  if (panel) panel.classList.add('scale-95');
+  setTimeout(() => {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }, 300);
 }
 
 /* --- LÓGICA METEOROLÓGICA --- */
@@ -410,7 +616,8 @@ async function cargarTiempo(ine) {
   try {
     const res = await fetch(`${WORKER_URL}?ine=${encodeURIComponent(ine)}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    currentWeatherData = await res.json();
+    const rawJson = await res.json();
+    currentWeatherData = sanitizarObjetoTexto(rawJson);
     diaSeleccionadoIndex = null;
 
     localStorage.setItem('saved_ine', ine);
@@ -454,17 +661,14 @@ function renderizarCarrusel(horasArray, titulo = "Próximas horas", esDiaFuturo 
   carrusel.scrollTo({ left: 0, behavior: 'smooth' });
 
   horasArray.forEach((hora, index) => {
-    // 1. Probabilidad estrictamente en % (NUNCA usar hora.precipitacion aquí)
     const probPrecip = parsearProbabilidadPct(
       primerValorDefinido(hora.prob_precipitacion, hora.probPrecipitacion, hora.prob_lluvia)
     );
 
-    // 2. Volumen acumulado estrictamente en mm (l/m²)
     const precipMm = parsearPrecipitacionMm(
       primerValorDefinido(hora.precipitacion_mm, hora.lluvia_mm, hora.precipitacion)
     );
 
-    // Bloque de precipitación diferenciado (% vs mm)
     let bloquePrecipitacionHTML = '';
     const probMostrar = probPrecip !== null ? probPrecip : 0;
 
@@ -484,7 +688,6 @@ function renderizarCarrusel(horasArray, titulo = "Próximas horas", esDiaFuturo 
       `;
     }
 
-    // Datos opcionales por hora
     let detallesExtraHoraHTML = '';
     const itemsExtraHora = [];
 
@@ -521,7 +724,10 @@ function renderizarCarrusel(horasArray, titulo = "Próximas horas", esDiaFuturo 
     const etiquetaHora = esAhora ? 'Ahora' : (hora.hora || '--:--');
     const card = document.createElement('div');
     const anchoCard = (itemsExtraHora.length > 0 || precipMm > 0) ? 'w-[96px]' : 'w-[84px]';
-    const bordeAhora = esAhora ? 'ring-1 ring-md-primary/40 bg-md-surface-container-high/70' : 'bg-md-surface-container';
+    // ring-inset evita cualquier recorte en los bordes del contenedor con scroll
+    const bordeAhora = esAhora
+      ? 'ring-2 ring-inset ring-md-primary/50 bg-md-surface-container-high/70'
+      : 'bg-md-surface-container';
 
     card.className = `snap-start shrink-0 ${bordeAhora} rounded-2xl p-3.5 flex flex-col items-center ${anchoCard} shadow-sm transition-all`;
 
@@ -544,14 +750,14 @@ function renderizarUI() {
 
   const { actualSincronizado, proximas24Horas } = obtenerEstadoSincronizado(data);
 
-  document.getElementById('ui-municipio').textContent = data.municipio?.nombre || 'Localidad';
+  document.getElementById('ui-municipio').textContent = obtenerNombreMunicipioLimpio(data);
   document.getElementById('ui-temp-actual').textContent = actualSincronizado.temperatura ?? '--';
-  document.getElementById('ui-desc-actual').textContent = actualSincronizado.estado_cielo ?? '--';
+  document.getElementById('ui-desc-actual').textContent = repararTextoMojibake(actualSincronizado.estado_cielo ?? '--');
   document.getElementById('ui-humedad').textContent = `${actualSincronizado.humedad ?? '--'}%`;
   document.getElementById('ui-viento').textContent = `${actualSincronizado.viento_kmh ?? '--'} km/h`;
   document.getElementById('ui-icono-actual').textContent = actualSincronizado.icono || 'cloud';
 
-  // Alertas y Avisos Meteorológicos (AEMET)
+  // Alertas y Avisos Meteorológicos (AEMET) -> Al pulsar abre el modal grande superpuesto
   const alertasDiv = document.getElementById('ui-alertas');
   const alertasActivas = extraerAlertasActivas(data);
 
@@ -562,41 +768,20 @@ function renderizarUI() {
       alertasDiv.innerHTML = '';
 
       alertasActivas.forEach(alerta => {
-        const nivelNorm = normalizarTexto(alerta.nivel);
-        let badgeStyle = 'background-color: rgba(59, 130, 246, 0.16); border: 1px solid rgba(59, 130, 246, 0.45); color: var(--md-primary);';
-        let etiquetaNivel = alerta.nivel;
-
-        if (nivelNorm.includes('amarill')) {
-          badgeStyle = 'background-color: rgba(234, 179, 8, 0.18); border: 1px solid rgba(234, 179, 8, 0.5); color: #eab308;';
-          etiquetaNivel = 'Aviso Amarillo';
-        } else if (nivelNorm.includes('naranj')) {
-          badgeStyle = 'background-color: rgba(249, 115, 22, 0.18); border: 1px solid rgba(249, 115, 22, 0.5); color: #f97316;';
-          etiquetaNivel = 'Aviso Naranja';
-        } else if (nivelNorm.includes('roj')) {
-          badgeStyle = 'background-color: rgba(239, 68, 68, 0.18); border: 1px solid rgba(239, 68, 68, 0.5); color: #ef4444;';
-          etiquetaNivel = 'Aviso Rojo';
-        } else if (nivelNorm.includes('especial')) {
-          badgeStyle = 'background-color: rgba(168, 85, 247, 0.18); border: 1px solid rgba(168, 85, 247, 0.5); color: #c084fc;';
-          etiquetaNivel = 'Aviso Especial';
-        } else if (!etiquetaNivel.toLowerCase().startsWith('aviso')) {
-          etiquetaNivel = `Aviso ${etiquetaNivel}`;
-        }
-
+        const estilos = obtenerEstilosNivelAlerta(alerta.nivel);
         const textoFenomeno = alerta.fenomeno ? ` · ${alerta.fenomeno}` : '';
         const badge = document.createElement('button');
         badge.type = 'button';
-        badge.style.cssText = badgeStyle;
-        badge.className = 'px-3 py-1.5 rounded-full flex items-center gap-1.5 text-xs font-semibold shadow-sm transition active:scale-95';
+        badge.style.cssText = estilos.badgeStyle;
+        badge.className = 'px-3.5 py-1.5 rounded-full flex items-center gap-1.5 text-xs font-semibold shadow-sm transition hover:opacity-90 active:scale-95 cursor-pointer';
         badge.innerHTML = `
           <span class="material-symbols-rounded text-[16px]">warning</span>
-          <span>${etiquetaNivel}${textoFenomeno}</span>
+          <span>${estilos.etiquetaCorta}${textoFenomeno}</span>
         `;
 
-        if (alerta.descripcion || alerta.fenomeno) {
-          badge.addEventListener('click', () => {
-            mostrarToast(alerta.descripcion || `${etiquetaNivel}: ${alerta.fenomeno}`, 'warning');
-          });
-        }
+        badge.addEventListener('click', () => {
+          abrirModalAlerta(alerta, alertasActivas);
+        });
 
         alertasDiv.appendChild(badge);
       });
@@ -664,12 +849,12 @@ function renderizarUI() {
     extraDiv.innerHTML = '';
   }
 
-  // Renderizado del carrusel según si hay un día futuro seleccionado o las próximas 24h sincronizadas
+  // Renderizado del carrusel
   if (diaSeleccionadoIndex !== null && data.proximos_dias?.[diaSeleccionadoIndex]) {
     const diaSel = data.proximos_dias[diaSeleccionadoIndex];
     const horasDiaSel = obtenerHorasParaDia(data, diaSel, diaSeleccionadoIndex);
     if (horasDiaSel.length > 0) {
-      renderizarCarrusel(horasDiaSel, `Horas: ${diaSel.dia_semana}`, true);
+      renderizarCarrusel(horasDiaSel, `Horas: ${repararTextoMojibake(diaSel.dia_semana)}`, true);
     } else {
       diaSeleccionadoIndex = null;
       renderizarCarrusel(proximas24Horas, "Próximas horas", false);
@@ -720,14 +905,13 @@ function renderizarListaDias(data) {
       };
     }
 
-    // Separación estricta en la lista de días: solo probabilidad en %
     const probPrecipDia = parsearProbabilidadPct(
       primerValorDefinido(dia.prob_precipitacion, dia.probPrecipitacion, dia.prob_lluvia)
     ) ?? 0;
 
     row.innerHTML = `
       <div class="flex flex-col w-28">
-        <span class="font-medium text-text-main leading-tight">${dia.dia_semana}</span>
+        <span class="font-medium text-text-main leading-tight">${repararTextoMojibake(dia.dia_semana)}</span>
         ${hasHoras ? `<span class="text-[11px] text-md-primary font-medium mt-0.5">${isSelected ? 'Viendo por horas' : 'Ver por horas'}</span>` : ''}
       </div>
       <div class="flex items-center gap-1.5 w-20">
@@ -790,25 +974,32 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const pwaInstallSection = document.getElementById('pwa-install-section');
   const btnInstallPwa = document.getElementById('btn-install-pwa');
+  const btnShareApp = document.getElementById('btn-share-app');
   const iosPwaModal = document.getElementById('ios-pwa-modal');
   const btnCloseIosModal = document.getElementById('btn-close-ios-modal');
   const btnOkIosModal = document.getElementById('btn-ok-ios-modal');
   const btnPrivacy = document.getElementById('btn-privacy');
 
+  const alertModal = document.getElementById('alert-modal');
+  const btnCloseAlertModal = document.getElementById('btn-close-alert-modal');
+  const btnOkAlertModal = document.getElementById('btn-ok-alert-modal');
+
   /* --- CIERRES DE MODALES --- */
-  const closeSearchModal = () => {
+  const closeSearchModal = (volverATiempo = true) => {
     if (!searchModal || searchModal.classList.contains('hidden')) return;
     searchModal.classList.add('hidden');
     searchModal.classList.remove('flex');
     searchInput.value = '';
     searchResults.innerHTML = '';
     btnGps.classList.remove('hidden');
+    if (volverATiempo) actualizarBarraNavegacion('tiempo');
   };
 
-  const closeOptionsModal = () => {
+  const closeOptionsModal = (volverATiempo = true) => {
     if (!optionsModal || optionsModal.classList.contains('hidden')) return;
     optionsOverlay.classList.add('opacity-0');
     optionsPanel.classList.add('translate-y-full');
+    if (volverATiempo) actualizarBarraNavegacion('tiempo');
     setTimeout(() => {
       optionsModal.classList.add('hidden');
       optionsModal.classList.remove('flex');
@@ -824,7 +1015,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     }, 300);
   };
 
-  if (btnCloseOptions) btnCloseOptions.addEventListener('click', closeOptionsModal);
+  if (btnCloseOptions) btnCloseOptions.addEventListener('click', () => closeOptionsModal(true));
+  if (btnCloseAlertModal) btnCloseAlertModal.addEventListener('click', cerrarModalAlerta);
+  if (btnOkAlertModal) btnOkAlertModal.addEventListener('click', cerrarModalAlerta);
+  if (alertModal) {
+    alertModal.addEventListener('click', (e) => {
+      if (e.target === alertModal) cerrarModalAlerta();
+    });
+  }
 
   if (btnVolverHoy) {
     btnVolverHoy.addEventListener('click', () => {
@@ -835,9 +1033,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (btnTiempo) {
     btnTiempo.addEventListener('click', () => {
-      closeSearchModal();
-      closeOptionsModal();
+      closeSearchModal(false);
+      closeOptionsModal(false);
       closeIosModal();
+      cerrarModalAlerta();
+      actualizarBarraNavegacion('tiempo');
       if (currentWeatherData) {
         diaSeleccionadoIndex = null;
         renderizarUI();
@@ -846,7 +1046,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // Re-sincronizar automáticamente al volver a la pestaña/app si ha cambiado la hora
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && currentWeatherData) {
       renderizarUI();
@@ -901,7 +1100,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (btnSearch) {
     btnSearch.addEventListener('click', () => {
-      closeOptionsModal();
+      closeOptionsModal(false);
+      cerrarModalAlerta();
+      actualizarBarraNavegacion('buscar');
       searchModal.classList.remove('hidden');
       searchModal.classList.add('flex');
       searchInput.focus();
@@ -911,7 +1112,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  if (btnCloseSearch) btnCloseSearch.addEventListener('click', closeSearchModal);
+  if (btnCloseSearch) btnCloseSearch.addEventListener('click', () => closeSearchModal(true));
 
   if (btnGps) {
     btnGps.addEventListener('click', () => {
@@ -962,7 +1163,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   window.seleccionarMunicipio = (ine) => {
-    closeSearchModal();
+    closeSearchModal(true);
     document.getElementById('ui-municipio').textContent = "Cargando...";
     cargarTiempo(ine);
   };
@@ -970,7 +1171,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   /* --- MENÚ DE OPCIONES --- */
   if (btnOptions) {
     btnOptions.addEventListener('click', () => {
-      closeSearchModal();
+      closeSearchModal(false);
+      cerrarModalAlerta();
+      actualizarBarraNavegacion('opciones');
       optionsModal.classList.remove('hidden');
       optionsModal.classList.add('flex');
       void optionsModal.offsetWidth;
@@ -979,7 +1182,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  if (optionsOverlay) optionsOverlay.addEventListener('click', closeOptionsModal);
+  if (optionsOverlay) optionsOverlay.addEventListener('click', () => closeOptionsModal(true));
 
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
   if (isStandalone && pwaInstallSection) pwaInstallSection.classList.add('hidden');
@@ -988,7 +1191,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     btnInstallPwa.addEventListener('click', async () => {
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
       if (isIOS) {
-        closeOptionsModal();
+        closeOptionsModal(true);
         iosPwaModal.classList.remove('hidden');
         iosPwaModal.classList.add('flex');
         void iosPwaModal.offsetWidth;
@@ -998,10 +1201,39 @@ document.addEventListener('DOMContentLoaded', async () => {
         const { outcome } = await deferredInstallPrompt.userChoice;
         if (outcome === 'accepted') {
           deferredInstallPrompt = null;
-          closeOptionsModal();
+          closeOptionsModal(true);
         }
       } else {
         mostrarToast('Abre el menú del navegador (⋮) y pulsa "Instalar aplicación"', 'install_mobile');
+      }
+    });
+  }
+
+  // Botón de Compartir nativo
+  if (btnShareApp) {
+    btnShareApp.addEventListener('click', async () => {
+      const shareData = {
+        title: 'Pablómetro',
+        text: 'El tiempo oficial de la AEMET, pero con buen gusto.',
+        url: window.location.origin + window.location.pathname
+      };
+
+      if (navigator.share) {
+        try {
+          await navigator.share(shareData);
+        } catch (err) {
+          if (err.name !== 'AbortError') {
+            mostrarToast('No se pudo abrir el menú de compartir', 'error');
+          }
+        }
+      } else if (navigator.clipboard) {
+        try {
+          await navigator.clipboard.writeText(shareData.url);
+          closeOptionsModal(true);
+          mostrarToast('Enlace copiado al portapapeles', 'content_copy');
+        } catch (err) {
+          mostrarToast('No se pudo copiar el enlace', 'error');
+        }
       }
     });
   }
@@ -1011,7 +1243,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (btnPrivacy) {
     btnPrivacy.addEventListener('click', () => {
-      closeOptionsModal();
+      closeOptionsModal(true);
       mostrarToast('Sin cookies de rastreo. Solo guardamos tus ajustes en el dispositivo.', 'verified_user');
     });
   }
@@ -1105,6 +1337,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   updateSettingsUI();
+  actualizarBarraNavegacion('tiempo');
 
   /* --- CARGA INICIAL --- */
   const savedIne = localStorage.getItem('saved_ine') || '07054';
@@ -1114,11 +1347,21 @@ document.addEventListener('DOMContentLoaded', async () => {
       const res = await fetch('municipios.json');
       if (res.ok) {
         const rawData = await res.json();
-        municipiosDB = rawData.map(m => ({
-          ...m,
-          _nombreNorm: normalizarTexto(m.nombre),
-          _provNorm: normalizarTexto(m.provincia)
-        }));
+        municipiosDB = rawData.map(m => {
+          const nombreLimpio = repararTextoMojibake(m.nombre);
+          const provLimpia = repararTextoMojibake(m.provincia);
+          return {
+            ...m,
+            nombre: nombreLimpio,
+            provincia: provLimpia,
+            _nombreNorm: normalizarTexto(nombreLimpio),
+            _provNorm: normalizarTexto(provLimpia)
+          };
+        });
+        // Si los datos del tiempo cargaron antes que municipios.json, refrescar el título con el nombre limpio
+        if (currentWeatherData) {
+          document.getElementById('ui-municipio').textContent = obtenerNombreMunicipioLimpio(currentWeatherData);
+        }
       }
     } catch (error) {
       console.error("No se pudo cargar la base de datos de municipios", error);
