@@ -1,0 +1,6 @@
+[
+  { "id_ine": "07054", "nombre": "Santa Eulària des Riu", "provincia": "Illes Balears", "cps": ["07840", "07849", "07819"] },
+  { "id_ine": "28079", "nombre": "Madrid", "provincia": "Madrid", "cps": ["28001", "28002", "28013"] },
+  { "id_ine": "08019", "nombre": "Barcelona", "provincia": "Barcelona", "cps": ["08001", "08002"] },
+  { "id_ine": "48020", "nombre": "Bilbao", "provincia": "Bizkaia", "cps": ["48001", "48002"] }
+]
