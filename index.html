@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pablómetro</title>
+  <meta name="description" content="El tiempo oficial de la AEMET, pero con buen gusto. Una aplicación meteorológica ultraligera y minimalista.">
   
   <!-- Metadatos PWA & iOS -->
   <meta name="theme-color" content="#0f172a">
@@ -14,6 +15,7 @@
   <link rel="icon" type="image/png" href="favicon.png" />
   
   <!-- Etiquetas Open Graph -->
+  <meta property="og:type" content="website">
   <meta property="og:title" content="Pablómetro">
   <meta property="og:description" content="El tiempo oficial de la AEMET, pero con buen gusto. Una aplicación meteorológica ultraligera y minimalista.">
   <meta property="og:image" content="favicon.png">
@@ -30,7 +32,7 @@
       --md-primary: #1b6ef3;
       --text-main: #0f172a;
       --text-muted: #475569;
-      --border-color: rgba(226, 232, 240, 0.8);
+      --border-color: rgba(203, 213, 225, 0.85);
     }
 
     @media (prefers-color-scheme: dark) {
@@ -41,7 +43,7 @@
         --md-primary: #6bb6ff; 
         --text-main: #f8fafc;
         --text-muted: #94a3b8;
-        --border-color: rgba(51, 65, 85, 0.8);
+        --border-color: rgba(51, 65, 85, 0.85);
       }
     }
     :root[data-theme="dark"] {
@@ -51,7 +53,7 @@
       --md-primary: #6bb6ff;
       --text-main: #f8fafc;
       --text-muted: #94a3b8;
-      --border-color: rgba(51, 65, 85, 0.8);
+      --border-color: rgba(51, 65, 85, 0.85);
     }
 
     :root[data-color="blue"] { --md-primary: #1b6ef3; }
@@ -165,21 +167,24 @@
 </head>
 <body class="min-h-screen p-4 md:p-8 max-w-2xl mx-auto relative pb-28">
 
+  <!-- Toast de notificaciones -->
   <div id="toast-notification" class="fixed top-5 left-1/2 -translate-x-1/2 z-[70] bg-md-surface-container-high border border-border-color text-text-main px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 transition-all duration-300 opacity-0 -translate-y-4 pointer-events-none max-w-[90vw]">
     <span id="toast-icon" class="material-symbols-rounded text-md-primary shrink-0">info</span>
     <span id="toast-message" class="text-sm font-medium">Mensaje</span>
   </div>
 
+  <!-- Cabecera superior: nombre completo sin truncar -->
   <header class="relative flex justify-center items-center mb-6 pt-2 min-h-12" id="header-top">
     <div class="absolute left-0 flex items-center text-md-primary top-1/2 -translate-y-1/2">
       <img src="favicon.png" alt="Logo" class="w-8 h-8 rounded-lg object-contain">
     </div>
-    <h1 id="ui-municipio" class="text-2xl font-medium tracking-tight text-center w-full px-10 text-balance leading-tight">
+    <h1 id="ui-municipio" class="text-xl sm:text-2xl font-semibold tracking-tight text-center w-full px-11 whitespace-normal break-words text-balance leading-snug">
       Cargando...
     </h1>
   </header>
 
   <main id="weather-content" class="transition-opacity duration-300">
+    <!-- Tarjeta principal del tiempo actual -->
     <section class="bg-md-surface-container-high rounded-md-card p-6 mb-6 flex flex-col items-center justify-center shadow-sm w-full transition-all relative">
       <span id="ui-icono-actual" class="material-symbols-rounded text-6xl text-md-primary mb-2">cloud</span>
       <div class="flex items-start">
@@ -188,29 +193,48 @@
       </div>
       <p id="ui-desc-actual" class="text-lg mt-1 font-medium capitalize text-center w-full">--</p>
       
-      <div class="flex gap-4 mt-4 text-sm font-medium text-text-muted">
-        <div class="flex items-center gap-1"><span class="material-symbols-rounded text-base">water_drop</span> <span id="ui-humedad">--%</span></div>
-        <div class="flex items-center gap-1"><span class="material-symbols-rounded text-base">air</span> <span id="ui-viento">-- km/h</span></div>
+      <div class="flex gap-5 mt-4 text-sm font-medium text-text-muted">
+        <div class="flex items-center gap-1.5" title="Humedad relativa">
+          <span class="material-symbols-rounded text-[18px] text-md-primary/80">water_drop</span>
+          <span id="ui-humedad">--%</span>
+        </div>
+        <div class="flex items-center gap-1.5" title="Velocidad del viento">
+          <span class="material-symbols-rounded text-[18px] text-md-primary/80">air</span>
+          <span id="ui-viento">-- km/h</span>
+        </div>
       </div>
 
-      <!-- Alertas meteorológicas (Naranja, Roja, Amarilla) -->
-      <div id="ui-alertas" class="hidden flex-wrap gap-2 justify-center w-full mt-3"></div>
+      <!-- Alertas meteorológicas (Amarilla, Naranja, Roja) -->
+      <div id="ui-alertas" class="hidden flex-wrap gap-2 justify-center w-full mt-4"></div>
 
-      <!-- Contenedor dinámico de previsión completa (datos extra) -->
-      <div id="ui-datos-extra" class="hidden grid-cols-2 sm:grid-cols-3 gap-2 w-full mt-5 border-t border-border-color pt-5 text-sm font-medium text-text-muted">
+      <!-- Contenedor minimalista y adaptable de datos extra -->
+      <div id="ui-datos-extra" class="hidden flex-wrap justify-center gap-2.5 w-full mt-5 border-t border-border-color pt-5">
       </div>
     </section>
 
-    <!-- Título dinámico para el carrusel de horas -->
-    <h2 id="titulo-carrusel-horas" class="text-sm font-semibold ml-2 mb-3 text-text-muted uppercase tracking-wider transition-all duration-300">Próximas horas</h2>
+    <!-- Cabecera dinámica del carrusel por horas -->
+    <div id="seccion-horas" class="flex items-center justify-between ml-2 mr-1 mb-3">
+      <h2 id="titulo-carrusel-horas" class="text-sm font-semibold text-text-muted uppercase tracking-wider transition-colors duration-300">
+        Próximas horas
+      </h2>
+      <button id="btn-volver-hoy" class="hidden items-center gap-1 text-xs font-semibold text-md-primary bg-md-surface-container hover:bg-md-surface-container-high px-3 py-1 rounded-full transition">
+        <span class="material-symbols-rounded text-[15px]">schedule</span>
+        <span>Volver a hoy</span>
+      </button>
+    </div>
+
     <section id="ui-carrusel-horas" class="flex gap-3 overflow-x-auto no-scrollbar pb-2 mb-8 snap-x scroll-smooth">
     </section>
 
-    <h2 class="text-sm font-semibold ml-2 mb-3 text-text-muted uppercase tracking-wider">Próximos días</h2>
+    <div class="flex items-center justify-between ml-2 mr-2 mb-3">
+      <h2 class="text-sm font-semibold text-text-muted uppercase tracking-wider">Próximos días</h2>
+      <span id="hint-dias-clicables" class="text-xs text-text-muted hidden sm:inline">Pulsa un día para ver sus horas</span>
+    </div>
     <section id="ui-lista-dias" class="bg-md-surface-container rounded-md-card overflow-hidden mb-6">
     </section>
   </main>
 
+  <!-- Barra de navegación inferior -->
   <nav class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-md-surface/80 backdrop-blur-lg shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-border-color rounded-full p-1.5 flex items-center gap-1 z-40">
     <button id="btn-tiempo" class="flex items-center gap-2 px-5 py-2.5 bg-md-surface-container-high rounded-full transition">
       <span class="material-symbols-rounded text-[22px] text-md-primary" style="font-variation-settings: 'FILL' 1;">partly_cloudy_day</span>
@@ -226,12 +250,13 @@
     </button>
   </nav>
 
+  <!-- Modal del buscador -->
   <div id="search-modal" class="fixed inset-0 bg-md-surface z-50 hidden flex-col transition-opacity">
     <div class="p-4 flex gap-3 items-center border-b border-border-color bg-md-surface">
       <button id="btn-close-search" class="p-2 rounded-full hover:bg-md-surface-container transition flex items-center justify-center">
         <span class="material-symbols-rounded text-text-muted">arrow_back</span>
       </button>
-      <input type="text" id="search-input" placeholder="Buscar ciudad o código postal..." 
+      <input type="text" id="search-input" placeholder="Buscar localidad o código postal..." 
              class="flex-1 bg-transparent text-lg outline-none placeholder:text-text-muted text-text-main" autocomplete="off">
     </div>
     <button id="btn-gps" class="w-full p-4 flex items-center gap-3 border-b border-border-color hover:bg-md-surface-container active:bg-md-surface-container transition text-left text-md-primary">
@@ -242,10 +267,11 @@
     </div>
   </div>
 
+  <!-- Modal de Opciones / Ajustes -->
   <div id="options-modal" class="fixed inset-0 z-50 hidden justify-center items-end">
     <div id="options-overlay" class="absolute inset-0 bg-black/50 opacity-0 transition-opacity duration-300"></div>
     
-    <div id="options-panel" class="relative bg-md-surface w-full max-w-2xl rounded-t-3xl p-6 pb-10 shadow-2xl transform translate-y-full transition-transform duration-300 flex flex-col gap-6 max-h-[90vh] overflow-y-auto">
+    <div id="options-panel" class="relative bg-md-surface w-full max-w-2xl rounded-t-3xl p-6 pb-10 shadow-2xl transform translate-y-full transition-transform duration-300 flex flex-col gap-6 max-h-[90vh] overflow-y-auto no-scrollbar">
       <div class="w-12 h-1.5 bg-border-color rounded-full mx-auto mb-1 shrink-0"></div>
       
       <!-- Cabecera con botón de cierre -->
@@ -292,48 +318,66 @@
 
       <!-- Desplegable Mostrar Previsión Completa -->
       <div>
-        <p class="text-sm font-medium text-text-muted mb-3">INFORMACIÓN</p>
+        <p class="text-sm font-medium text-text-muted mb-3">INFORMACIÓN METEOROLÓGICA</p>
         <div class="bg-md-surface-container-high rounded-2xl overflow-hidden transition-all duration-300">
           <button id="btn-toggle-advanced-menu" class="w-full py-3.5 px-4 hover:bg-md-surface-container transition flex items-center justify-between text-text-main font-medium">
             <div class="flex items-center gap-3">
-              <span class="material-symbols-rounded text-md-primary">analytics</span>
-              <span>Mostrar previsión completa</span>
+              <span class="material-symbols-rounded text-md-primary">tune</span>
+              <span>Mostrar más datos meteorológicos</span>
             </div>
             <span id="advanced-menu-icon" class="material-symbols-rounded text-text-muted transition-transform duration-300">expand_more</span>
           </button>
           
           <div id="advanced-options-list" class="hidden flex-col pb-2 px-2 gap-1 border-t border-border-color">
-            <!-- Items generados en JS para mantener el código limpio, usando estilos tailwind de toggle -->
             <label class="flex items-center justify-between p-3 rounded-xl hover:bg-md-surface-container cursor-pointer transition">
-              <span class="text-sm font-medium text-text-main">Índice UV</span>
+              <div class="flex items-center gap-2.5">
+                <span class="material-symbols-rounded text-[18px] text-md-primary">wb_sunny</span>
+                <span class="text-sm font-medium text-text-main">Radiación ultravioleta (UV)</span>
+              </div>
               <div class="relative inline-flex items-center cursor-pointer">
                 <input type="checkbox" class="adv-pref-checkbox sr-only peer" data-key="uv">
                 <div class="w-10 h-6 bg-border-color peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-4 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-md-primary"></div>
               </div>
             </label>
+
             <label class="flex items-center justify-between p-3 rounded-xl hover:bg-md-surface-container cursor-pointer transition">
-              <span class="text-sm font-medium text-text-main">Cota de nieve</span>
+              <div class="flex items-center gap-2.5">
+                <span class="material-symbols-rounded text-[18px] text-md-primary">ac_unit</span>
+                <span class="text-sm font-medium text-text-main">Cota de nieve</span>
+              </div>
               <div class="relative inline-flex items-center cursor-pointer">
                 <input type="checkbox" class="adv-pref-checkbox sr-only peer" data-key="nieve">
                 <div class="w-10 h-6 bg-border-color peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-4 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-md-primary"></div>
               </div>
             </label>
+
             <label class="flex items-center justify-between p-3 rounded-xl hover:bg-md-surface-container cursor-pointer transition">
-              <span class="text-sm font-medium text-text-main">Probabilidad de tormenta</span>
+              <div class="flex items-center gap-2.5">
+                <span class="material-symbols-rounded text-[18px] text-md-primary">thunderstorm</span>
+                <span class="text-sm font-medium text-text-main">Probabilidad de tormenta</span>
+              </div>
               <div class="relative inline-flex items-center cursor-pointer">
                 <input type="checkbox" class="adv-pref-checkbox sr-only peer" data-key="tormenta">
                 <div class="w-10 h-6 bg-border-color peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-4 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-md-primary"></div>
               </div>
             </label>
+
             <label class="flex items-center justify-between p-3 rounded-xl hover:bg-md-surface-container cursor-pointer transition">
-              <span class="text-sm font-medium text-text-main">Sensación térmica</span>
+              <div class="flex items-center gap-2.5">
+                <span class="material-symbols-rounded text-[18px] text-md-primary">thermostat</span>
+                <span class="text-sm font-medium text-text-main">Sensación térmica</span>
+              </div>
               <div class="relative inline-flex items-center cursor-pointer">
                 <input type="checkbox" class="adv-pref-checkbox sr-only peer" data-key="sensacion">
                 <div class="w-10 h-6 bg-border-color peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-4 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-md-primary"></div>
               </div>
             </label>
+
             <label class="flex items-center justify-between p-3 rounded-xl hover:bg-md-surface-container cursor-pointer transition">
-              <span class="text-sm font-medium text-text-main">Velocidad y dir. del viento</span>
+              <div class="flex items-center gap-2.5">
+                <span class="material-symbols-rounded text-[18px] text-md-primary">air</span>
+                <span class="text-sm font-medium text-text-main">Velocidad y dir. de rachas de viento</span>
+              </div>
               <div class="relative inline-flex items-center cursor-pointer">
                 <input type="checkbox" class="adv-pref-checkbox sr-only peer" data-key="viento">
                 <div class="w-10 h-6 bg-border-color peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-4 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-md-primary"></div>
@@ -354,7 +398,7 @@
         </button>
       </div>
 
-      <!-- Nueva sección AVISOS Y CONTACTO -->
+      <!-- Sección AVISOS Y CONTACTO -->
       <div class="mt-1">
         <p class="text-sm font-medium text-text-muted mb-3">AVISOS Y CONTACTO</p>
         <div class="flex flex-col gap-3">
@@ -383,6 +427,7 @@
     </div>
   </div>
 
+  <!-- Modal instrucciones PWA en iOS -->
   <div id="ios-pwa-modal" class="fixed inset-0 z-[60] hidden items-center justify-center p-4 bg-black/60 backdrop-blur-sm opacity-0 transition-opacity duration-300">
     <div class="bg-md-surface border border-border-color rounded-3xl p-6 max-w-sm w-full shadow-2xl flex flex-col gap-4">
       <div class="flex justify-between items-center">
