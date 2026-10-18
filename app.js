@@ -4,6 +4,11 @@ let municipiosCargando = true;
 let deferredInstallPrompt = null;
 let currentWeatherData = null; 
 
+// Configuración por defecto para previsión completa (desactivadas)
+let advPrefs = JSON.parse(localStorage.getItem('app_advanced_prefs')) || {
+  uv: false, nieve: false, tormenta: false, sensacion: false, viento: false
+};
+
 /* --- UTILIDADES --- */
 function normalizarTexto(str) {
   if (!str) return '';
@@ -99,6 +104,7 @@ function inicializarPWA() {
     mostrarToast('Aplicación instalada correctamente', 'check_circle');
   });
 }
+
 inicializarPWA();
 
 /* --- LÓGICA METEOROLÓGICA --- */
@@ -120,9 +126,18 @@ async function cargarTiempo(ine) {
   }
 }
 
-// Pintar el carrusel de horas
 function renderizarCarrusel(horasArray, titulo = "Próximas horas") {
-  document.getElementById('titulo-carrusel-horas').textContent = titulo;
+  const tituloEl = document.getElementById('titulo-carrusel-horas');
+  tituloEl.textContent = titulo;
+  
+  // Resaltado visual sutil al cambiar de día
+  tituloEl.classList.remove('text-text-muted');
+  tituloEl.classList.add('text-md-primary');
+  setTimeout(() => {
+    tituloEl.classList.add('text-text-muted');
+    tituloEl.classList.remove('text-md-primary');
+  }, 1200);
+
   const carrusel = document.getElementById('ui-carrusel-horas');
   carrusel.innerHTML = '';
   carrusel.scrollTo({ left: 0, behavior: 'smooth' });
@@ -149,42 +164,32 @@ function renderizarUI() {
   const data = currentWeatherData;
 
   document.getElementById('ui-municipio').textContent = data.municipio.nombre;
+  
   document.getElementById('ui-temp-actual').textContent = data.actual.temperatura;
   document.getElementById('ui-desc-actual').textContent = data.actual.estado_cielo;
   document.getElementById('ui-humedad').textContent = `${data.actual.humedad}%`;
   document.getElementById('ui-viento').textContent = `${data.actual.viento_kmh} km/h`;
   document.getElementById('ui-icono-actual').textContent = data.actual.icono;
 
-  // Lógica para Alertas Meteorológicas
+  // Lógica de Alertas Meteorológicas (AEMET)
   const alertasDiv = document.getElementById('ui-alertas');
-  const alertasData = data.alertas || (data.actual && data.actual.alertas) || [];
+  // Se busca en data.alertas o en el nivel base según estructura común del proxy
+  const alertas = data.alertas || data.municipio?.alertas || [];
   
-  if (alertasData.length > 0) {
+  if (alertas.length > 0) {
     alertasDiv.classList.remove('hidden');
     alertasDiv.classList.add('flex');
-    alertasDiv.innerHTML = alertasData.map(alerta => {
-      let bgClass = 'bg-yellow-100 dark:bg-yellow-500/10';
-      let textClass = 'text-yellow-800 dark:text-yellow-400';
-      let borderClass = 'border-yellow-300 dark:border-yellow-500/20';
-      let dotClass = 'bg-yellow-500';
-      
+    alertasDiv.innerHTML = alertas.map(alerta => {
+      let colors = 'bg-md-surface-container text-text-main';
       const nivel = (alerta.nivel || '').toLowerCase();
-      if (nivel.includes('naranja')) {
-        bgClass = 'bg-orange-100 dark:bg-orange-500/10';
-        textClass = 'text-orange-800 dark:text-orange-400';
-        borderClass = 'border-orange-300 dark:border-orange-500/20';
-        dotClass = 'bg-orange-500';
-      } else if (nivel.includes('roj')) {
-        bgClass = 'bg-red-100 dark:bg-red-500/10';
-        textClass = 'text-red-800 dark:text-red-400';
-        borderClass = 'border-red-300 dark:border-red-500/20';
-        dotClass = 'bg-red-500';
-      }
-
+      if (nivel.includes('amarill')) colors = 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border border-yellow-500/30';
+      if (nivel.includes('naranj')) colors = 'bg-orange-500/20 text-orange-700 dark:text-orange-400 border border-orange-500/30';
+      if (nivel.includes('roj')) colors = 'bg-red-500/20 text-red-700 dark:text-red-400 border border-red-500/30';
+      
       return `
-        <div class="flex items-center gap-3 px-4 py-2.5 rounded-2xl border ${borderClass} ${bgClass} ${textClass} w-full shadow-sm">
-          <span class="w-2.5 h-2.5 rounded-full ${dotClass} shrink-0 animate-pulse"></span>
-          <span class="text-sm font-semibold truncate flex-1">${alerta.descripcion || alerta.nivel || 'Aviso meteorológico'}</span>
+        <div class="${colors} px-3 py-1 rounded-full flex items-center gap-1.5 text-xs font-semibold shadow-sm">
+          <span class="material-symbols-rounded text-[14px]">warning</span>
+          <span>Aviso ${alerta.nivel}</span>
         </div>
       `;
     }).join('');
@@ -194,23 +199,23 @@ function renderizarUI() {
     alertasDiv.innerHTML = '';
   }
 
-  // Lógica para Datos Avanzados
+  // Lógica de Previsión Completa seleccionada
   const extraDiv = document.getElementById('ui-datos-extra');
-  const advOpts = JSON.parse(localStorage.getItem('app_adv_opts') || '[]');
+  const showAnyAdv = Object.values(advPrefs).some(val => val);
   
-  if (advOpts.length > 0 && extraDiv) {
+  if (showAnyAdv && extraDiv) {
     extraDiv.classList.remove('hidden');
     extraDiv.classList.add('grid');
     let extraHTML = '';
     
-    if (advOpts.includes('uv') && data.actual.uv !== undefined) extraHTML += `<div class="flex flex-col items-center justify-center gap-1 bg-md-surface/80 p-2.5 rounded-xl"><span class="material-symbols-rounded text-[20px] text-md-primary">routine</span> <span class="text-[11px] font-semibold uppercase tracking-wide">UV: ${data.actual.uv}</span></div>`;
-    if (advOpts.includes('nieve') && data.actual.cota_nieve !== undefined && data.actual.cota_nieve !== null && data.actual.cota_nieve !== "") extraHTML += `<div class="flex flex-col items-center justify-center gap-1 bg-md-surface/80 p-2.5 rounded-xl"><span class="material-symbols-rounded text-[20px] text-md-primary">ac_unit</span> <span class="text-[11px] font-semibold uppercase tracking-wide">Nieve: ${data.actual.cota_nieve}m</span></div>`;
-    if (advOpts.includes('tormenta') && data.actual.prob_tormenta !== undefined) extraHTML += `<div class="flex flex-col items-center justify-center gap-1 bg-md-surface/80 p-2.5 rounded-xl"><span class="material-symbols-rounded text-[20px] text-md-primary">thunderstorm</span> <span class="text-[11px] font-semibold uppercase tracking-wide">Tormentas: ${data.actual.prob_tormenta}%</span></div>`;
-    if (advOpts.includes('sensacion') && data.actual.sensacion_termica !== undefined) extraHTML += `<div class="flex flex-col items-center justify-center gap-1 bg-md-surface/80 p-2.5 rounded-xl"><span class="material-symbols-rounded text-[20px] text-md-primary">thermostat</span> <span class="text-[11px] font-semibold uppercase tracking-wide">Sensación: ${data.actual.sensacion_termica}°</span></div>`;
-    if (advOpts.includes('viento') && (data.actual.rachas_viento !== undefined || data.actual.direccion_viento !== undefined)) extraHTML += `<div class="flex flex-col items-center justify-center gap-1 bg-md-surface/80 p-2.5 rounded-xl"><span class="material-symbols-rounded text-[20px] text-md-primary">airwave</span> <span class="text-[11px] font-semibold uppercase tracking-wide text-center leading-tight">Racha: ${data.actual.rachas_viento || '--'}km/h ${data.actual.direccion_viento || ''}</span></div>`;
+    if (advPrefs.uv && data.actual.uv !== undefined) extraHTML += `<div class="flex flex-col items-center justify-center gap-1 bg-md-surface/80 p-2.5 rounded-xl"><span class="material-symbols-rounded text-[20px] text-md-primary">routine</span> <span class="text-[11px] font-semibold uppercase tracking-wide">UV: ${data.actual.uv}</span></div>`;
+    if (advPrefs.nieve && data.actual.cota_nieve !== undefined && data.actual.cota_nieve !== null && data.actual.cota_nieve !== "") extraHTML += `<div class="flex flex-col items-center justify-center gap-1 bg-md-surface/80 p-2.5 rounded-xl"><span class="material-symbols-rounded text-[20px] text-md-primary">ac_unit</span> <span class="text-[11px] font-semibold uppercase tracking-wide">Nieve: ${data.actual.cota_nieve}m</span></div>`;
+    if (advPrefs.tormenta && data.actual.prob_tormenta !== undefined) extraHTML += `<div class="flex flex-col items-center justify-center gap-1 bg-md-surface/80 p-2.5 rounded-xl"><span class="material-symbols-rounded text-[20px] text-md-primary">thunderstorm</span> <span class="text-[11px] font-semibold uppercase tracking-wide">Tormentas: ${data.actual.prob_tormenta}%</span></div>`;
+    if (advPrefs.sensacion && data.actual.sensacion_termica !== undefined) extraHTML += `<div class="flex flex-col items-center justify-center gap-1 bg-md-surface/80 p-2.5 rounded-xl"><span class="material-symbols-rounded text-[20px] text-md-primary">thermostat</span> <span class="text-[11px] font-semibold uppercase tracking-wide">Sensación: ${data.actual.sensacion_termica}°</span></div>`;
+    if (advPrefs.viento && (data.actual.rachas_viento !== undefined || data.actual.direccion_viento !== undefined)) extraHTML += `<div class="flex flex-col items-center justify-center gap-1 bg-md-surface/80 p-2.5 rounded-xl"><span class="material-symbols-rounded text-[20px] text-md-primary">airwave</span> <span class="text-[11px] font-semibold uppercase tracking-wide text-center leading-tight">Racha: ${data.actual.rachas_viento || '--'}km/h ${data.actual.direccion_viento || ''}</span></div>`;
     
     if (extraHTML === '') {
-      extraHTML = `<div class="col-span-full text-center text-xs text-text-muted py-2">Sin datos avanzados extra disponibles.</div>`;
+      extraHTML = `<div class="col-span-full text-center text-xs text-text-muted py-2">Datos seleccionados no disponibles hoy.</div>`;
     }
     extraDiv.innerHTML = extraHTML;
   } else if (extraDiv) {
@@ -220,34 +225,22 @@ function renderizarUI() {
 
   renderizarCarrusel(data.hoy_horas.slice(0, 24), "Próximas horas");
 
-  // Lista de próximos días dinámicos y clicables
   const lista = document.getElementById('ui-lista-dias');
   lista.innerHTML = '';
   data.proximos_dias.forEach((dia, index) => {
     if (index === 0) return; 
     
-    // Verificamos si la API ha mandado datos por horas para ese día
+    // Verificamos de forma segura si la API provee el arreglo de horas para este día
     const hasHoras = dia.horas && Array.isArray(dia.horas) && dia.horas.length > 0;
     const row = document.createElement('div');
     
-    row.className = `flex justify-between items-center p-4 border-b border-border-color last:border-0 transition ${hasHoras ? 'cursor-pointer active:bg-md-surface hover:bg-md-surface-container/80' : ''}`;
+    row.className = `flex justify-between items-center p-4 border-b border-border-color last:border-0 transition ${hasHoras ? 'cursor-pointer hover:bg-md-surface-container active:bg-md-surface-container-high' : ''}`;
     
     if (hasHoras) {
       row.onclick = () => {
         renderizarCarrusel(dia.horas, `Horas: ${dia.dia_semana}`);
-        
-        // Destacar el título del carrusel y hacer scroll suave hacia él
-        const anchor = document.getElementById('carrusel-anchor');
-        const titulo = document.getElementById('titulo-carrusel-horas');
-        
-        anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        
-        titulo.classList.remove('text-text-muted');
-        titulo.classList.add('text-md-primary');
-        setTimeout(() => {
-          titulo.classList.add('text-text-muted');
-          titulo.classList.remove('text-md-primary');
-        }, 1200);
+        // Scroll suave al top para que el usuario vea que ha cambiado el carrusel
+        window.scrollTo({ top: document.getElementById('header-top').offsetTop, behavior: 'smooth' });
       };
     }
 
@@ -262,7 +255,7 @@ function renderizarUI() {
           <span class="font-medium text-text-main">${dia.temp_max}°</span>
           <span class="text-text-muted">${dia.temp_min}°</span>
         </div>
-        ${hasHoras ? `<span class="material-symbols-rounded text-text-muted text-lg ml-1 bg-md-surface-container rounded-full p-0.5">chevron_right</span>` : `<span class="w-5 ml-1"></span>`}
+        ${hasHoras ? `<span class="material-symbols-rounded text-text-muted text-lg ml-1 opacity-70">chevron_right</span>` : `<span class="w-5 ml-1"></span>`}
       </div>
     `;
     lista.appendChild(row);
@@ -281,7 +274,6 @@ function calcularDistancia(lat1, lon1, lat2, lon2) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  /* --- Elementos del DOM --- */
   const btnTiempo = document.getElementById('btn-tiempo');
   const btnSearch = document.getElementById('btn-search');
   const searchModal = document.getElementById('search-modal');
@@ -294,20 +286,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   const textoGps = document.getElementById('texto-gps');
 
   const btnOptions = document.getElementById('btn-options');
-  const btnCloseOptions = document.getElementById('btn-close-options'); // El nuevo botón X
+  const btnCloseOptions = document.getElementById('btn-close-options');
   const optionsModal = document.getElementById('options-modal');
   const optionsOverlay = document.getElementById('options-overlay');
   const optionsPanel = document.getElementById('options-panel');
-  
   const themeBtns = document.querySelectorAll('.theme-btn');
   const colorBtns = document.querySelectorAll('.color-btn');
   const colorPicker = document.getElementById('custom-color-picker');
   const customColorPreview = document.getElementById('custom-color-preview');
   
   const btnToggleAdvMenu = document.getElementById('btn-toggle-advanced-menu');
-  const advOptionsContainer = document.getElementById('advanced-options-container');
   const advMenuIcon = document.getElementById('advanced-menu-icon');
-  const advCheckboxes = document.querySelectorAll('.adv-checkbox');
+  const advOptionsList = document.getElementById('advanced-options-list');
+  const advCheckboxes = document.querySelectorAll('.adv-pref-checkbox');
 
   const pwaInstallSection = document.getElementById('pwa-install-section');
   const btnInstallPwa = document.getElementById('btn-install-pwa');
@@ -316,7 +307,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const btnOkIosModal = document.getElementById('btn-ok-ios-modal');
   const btnPrivacy = document.getElementById('btn-privacy');
 
-  /* --- FUNCIONES DE CIERRE DE MODALES --- */
+  /* --- CIERRES DE MODALES --- */
   const closeSearchModal = () => {
     if (!searchModal || searchModal.classList.contains('hidden')) return;
     searchModal.classList.add('hidden');
@@ -345,21 +336,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     }, 300);
   };
 
+  if (btnCloseOptions) btnCloseOptions.addEventListener('click', closeOptionsModal);
+
   if (btnTiempo) {
     btnTiempo.addEventListener('click', () => {
       closeSearchModal();
       closeOptionsModal();
       closeIosModal();
-      if (currentWeatherData) renderizarCarrusel(currentWeatherData.hoy_horas.slice(0, 24), "Próximas horas");
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      if (currentWeatherData) {
+        renderizarCarrusel(currentWeatherData.hoy_horas.slice(0, 24), "Próximas horas");
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
     });
   }
 
-  if (btnCloseOptions) {
-    btnCloseOptions.addEventListener('click', closeOptionsModal);
-  }
-
-  /* --- LÓGICA DE BÚSQUEDA --- */
+  /* --- BUSCADOR --- */
   const renderizarResultadosBusqueda = (queryRaw) => {
     const query = normalizarTexto(queryRaw);
     if (query.length > 0) {
@@ -464,9 +455,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   if (searchInput) {
-    searchInput.addEventListener('input', (e) => {
-      renderizarResultadosBusqueda(e.target.value);
-    });
+    searchInput.addEventListener('input', (e) => renderizarResultadosBusqueda(e.target.value));
   }
 
   window.seleccionarMunicipio = (ine) => {
@@ -475,7 +464,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     cargarTiempo(ine);
   };
 
-  /* --- LÓGICA DEL MENÚ DE OPCIONES --- */
+  /* --- MENÚ DE OPCIONES --- */
   if (btnOptions) {
     btnOptions.addEventListener('click', () => {
       closeSearchModal();
@@ -495,7 +484,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (btnInstallPwa) {
     btnInstallPwa.addEventListener('click', async () => {
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-
       if (isIOS) {
         closeOptionsModal();
         iosPwaModal.classList.remove('hidden');
@@ -516,4 +504,132 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   if (btnCloseIosModal) btnCloseIosModal.addEventListener('click', closeIosModal);
-  if (btnOkIosModal
+  if (btnOkIosModal) btnOkIosModal.addEventListener('click', closeIosModal);
+
+  if (btnPrivacy) {
+    btnPrivacy.addEventListener('click', () => {
+      closeOptionsModal();
+      mostrarToast('Sin cookies de rastreo. Solo guardamos tus ajustes en el dispositivo.', 'verified_user');
+    });
+  }
+
+  /* --- AJUSTES UI --- */
+  const updateSettingsUI = () => {
+    const currentTheme = localStorage.getItem('app_theme') || 'system';
+    const currentColor = localStorage.getItem('app_color') || 'blue';
+
+    themeBtns.forEach(btn => {
+      btn.dataset.active = btn.dataset.themeVal === currentTheme ? 'true' : 'false';
+    });
+
+    colorBtns.forEach(btn => {
+      let isActive = false;
+      if (btn.dataset.colorVal === 'custom') {
+        isActive = currentColor.startsWith('#');
+        if (isActive) {
+          customColorPreview.style.background = currentColor;
+          window.applyCustomColor(currentColor);
+        }
+      } else {
+        isActive = btn.dataset.colorVal === currentColor;
+      }
+      btn.dataset.active = isActive ? 'true' : 'false';
+    });
+  };
+
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    const currentColor = localStorage.getItem('app_color') || 'blue';
+    if (currentColor.startsWith('#')) window.applyCustomColor(currentColor);
+  });
+
+  themeBtns.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const val = e.currentTarget.dataset.themeVal;
+      localStorage.setItem('app_theme', val);
+      if (val === 'system') document.documentElement.removeAttribute('data-theme');
+      else document.documentElement.setAttribute('data-theme', val);
+      updateSettingsUI();
+    });
+  });
+
+  colorBtns.forEach(btn => {
+    if (btn.dataset.colorVal !== 'custom') {
+      btn.addEventListener('click', (e) => {
+        const val = e.currentTarget.dataset.colorVal;
+        localStorage.setItem('app_color', val);
+        document.documentElement.setAttribute('data-color', val);
+        document.documentElement.style.removeProperty('--md-primary');
+        updateSettingsUI();
+      });
+    }
+  });
+
+  if (colorPicker) {
+    const savedColorInit = localStorage.getItem('app_color') || 'blue';
+    if (savedColorInit.startsWith('#')) colorPicker.value = savedColorInit;
+
+    colorPicker.addEventListener('input', (e) => {
+      const hex = e.target.value;
+      localStorage.setItem('app_color', hex);
+      document.documentElement.setAttribute('data-color', 'custom');
+      updateSettingsUI();
+    });
+  }
+
+  // --- Lógica del desplegable de Previsión Completa ---
+  if (btnToggleAdvMenu) {
+    btnToggleAdvMenu.addEventListener('click', () => {
+      advOptionsList.classList.toggle('hidden');
+      advOptionsList.classList.toggle('flex');
+      if (advOptionsList.classList.contains('hidden')) {
+        advMenuIcon.style.transform = 'rotate(0deg)';
+      } else {
+        advMenuIcon.style.transform = 'rotate(180deg)';
+      }
+    });
+  }
+
+  // Inicializar estado visual de los checkboxes basado en advPrefs
+  advCheckboxes.forEach(checkbox => {
+    const key = checkbox.dataset.key;
+    if (advPrefs[key]) checkbox.checked = true;
+
+    checkbox.addEventListener('change', (e) => {
+      advPrefs[key] = e.target.checked;
+      localStorage.setItem('app_advanced_prefs', JSON.stringify(advPrefs));
+      if (currentWeatherData) renderizarUI();
+    });
+  });
+
+  updateSettingsUI();
+
+  /* --- CARGA INICIAL --- */
+  const savedIne = localStorage.getItem('saved_ine') || '07054';
+
+  const cargarMunicipiosDB = async () => {
+    try {
+      const res = await fetch('municipios.json');
+      if (res.ok) {
+        const rawData = await res.json();
+        municipiosDB = rawData.map(m => ({
+          ...m,
+          _nombreNorm: normalizarTexto(m.nombre),
+          _provNorm: normalizarTexto(m.provincia)
+        }));
+      }
+    } catch (error) {
+      console.error("No se pudo cargar la base de datos de municipios", error);
+      mostrarToast("Error al cargar la lista de municipios", "error");
+    } finally {
+      municipiosCargando = false;
+      if (searchModal && !searchModal.classList.contains('hidden')) {
+        renderizarResultadosBusqueda(searchInput.value);
+      }
+    }
+  };
+
+  await Promise.all([
+    cargarMunicipiosDB(),
+    cargarTiempo(savedIne)
+  ]);
+});
