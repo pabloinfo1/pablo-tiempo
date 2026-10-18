@@ -40,7 +40,7 @@
   <!-- Top App Bar simulada -->
   <header class="flex justify-between items-center mb-6 pt-2">
     <h1 id="ui-municipio" class="text-2xl font-medium tracking-tight">Cargando...</h1>
-    <button class="w-12 h-12 flex items-center justify-center rounded-full bg-md-surface-container hover:bg-md-surface-container-high transition">
+    <button id="btn-search" class="w-12 h-12 flex items-center justify-center rounded-full bg-md-surface-container hover:bg-md-surface-container-high transition">
       <span class="material-symbols-rounded text-md-primary">search</span>
     </button>
   </header>
@@ -72,5 +72,20 @@
   </section>
 
   <script src="app.js"></script>
+  <!-- Modal de Búsqueda MD3 -->
+  <div id="search-modal" class="fixed inset-0 bg-md-surface z-50 hidden flex-col transition-opacity">
+    <!-- Barra superior de búsqueda -->
+    <div class="p-4 flex gap-3 items-center border-b border-slate-200/60 bg-md-surface">
+      <button id="btn-close-search" class="p-2 rounded-full hover:bg-md-surface-container transition flex items-center justify-center">
+        <span class="material-symbols-rounded text-slate-600">arrow_back</span>
+      </button>
+      <input type="text" id="search-input" placeholder="Buscar ciudad o código postal..." 
+             class="flex-1 bg-transparent text-lg outline-none placeholder:text-slate-400 text-slate-900" autocomplete="off">
+    </div>
+    <!-- Contenedor de resultados -->
+    <div id="search-results" class="flex-1 overflow-y-auto">
+      <!-- Los resultados se inyectan por JS -->
+    </div>
+  </div>
 </body>
 </html>
