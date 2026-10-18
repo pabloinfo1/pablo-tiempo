@@ -2,17 +2,42 @@ const WORKER_URL = 'https://aemet-proxy.pabloinfo1.workers.dev/';
 let municipiosDB = [];
 let municipiosCargando = true;
 let deferredInstallPrompt = null;
-let currentWeatherData = null; 
+let currentWeatherData = null;
+let diaSeleccionadoIndex = null; // null = Próximas 24h (Hoy), >0 = Día seleccionado
 
-// Configuración por defecto para previsión completa (desactivadas)
-let advPrefs = JSON.parse(localStorage.getItem('app_advanced_prefs')) || {
-  uv: false, nieve: false, tormenta: false, sensacion: false, viento: false
+const DEFAULT_ADV_PREFS = {
+  uv: false,
+  nieve: false,
+  tormenta: false,
+  sensacion: false,
+  viento: false
 };
+
+function cargarPreferenciasAvanzadas() {
+  try {
+    const guardadas = JSON.parse(localStorage.getItem('app_advanced_prefs'));
+    if (guardadas && typeof guardadas === 'object') {
+      return { ...DEFAULT_ADV_PREFS, ...guardadas };
+    }
+  } catch (e) {
+    console.warn('Preferencias avanzadas reiniciadas al valor por defecto.');
+  }
+  return { ...DEFAULT_ADV_PREFS };
+}
+
+let advPrefs = cargarPreferenciasAvanzadas();
 
 /* --- UTILIDADES --- */
 function normalizarTexto(str) {
   if (!str) return '';
   return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+}
+
+function primerValorDefinido(...valores) {
+  for (const val of valores) {
+    if (val !== undefined && val !== null && val !== '') return val;
+  }
+  return undefined;
 }
 
 let toastTimeout;
@@ -107,6 +132,106 @@ function inicializarPWA() {
 
 inicializarPWA();
 
+/* --- PROCESAMIENTO DE DATOS POR HORAS Y DÍAS --- */
+function agruparHorasPorSaltosDeDia(horasTotales) {
+  if (!Array.isArray(horasTotales) || horasTotales.length === 0) return [];
+  const grupos = [[]];
+  let diaActualIdx = 0;
+  let horaAnteriorNum = null;
+
+  horasTotales.forEach((item, idx) => {
+    const horaStr = String(item.hora || '');
+    const horaNum = parseInt(horaStr.split(':')[0], 10);
+
+    if (idx > 0 && !isNaN(horaNum) && horaAnteriorNum !== null) {
+      if (horaNum < horaAnteriorNum) {
+        diaActualIdx++;
+        grupos[diaActualIdx] = [];
+      }
+    }
+    if (!isNaN(horaNum)) horaAnteriorNum = horaNum;
+    grupos[diaActualIdx].push(item);
+  });
+
+  return grupos;
+}
+
+function obtenerHorasParaDia(data, diaObj, indexEnLista) {
+  if (!data || !diaObj) return [];
+
+  // 1. Si el objeto del día ya incluye el array de horas directamente
+  if (Array.isArray(diaObj.horas) && diaObj.horas.length > 0) {
+    return diaObj.horas;
+  }
+  if (Array.isArray(diaObj.hoy_horas) && diaObj.hoy_horas.length > 0) {
+    return diaObj.hoy_horas;
+  }
+
+  // 2. Si existe una estructura indexada en la raíz del JSON
+  if (Array.isArray(data.horas_por_dia?.[indexEnLista]) && data.horas_por_dia[indexEnLista].length > 0) {
+    return data.horas_por_dia[indexEnLista];
+  }
+
+  // 3. Si todas las horas (48h de AEMET) vienen dentro de data.hoy_horas
+  if (Array.isArray(data.hoy_horas) && data.hoy_horas.length > 0) {
+    if (diaObj.fecha) {
+      const porFecha = data.hoy_horas.filter(h => h.fecha && h.fecha === diaObj.fecha);
+      if (porFecha.length > 0) return porFecha;
+    }
+    const grupos = agruparHorasPorSaltosDeDia(data.hoy_horas);
+    if (grupos[indexEnLista] && grupos[indexEnLista].length > 0) {
+      return grupos[indexEnLista];
+    }
+  }
+
+  return [];
+}
+
+function extraerDatosAvanzadosActuales(data) {
+  const actual = data.actual || {};
+  const hora0 = (Array.isArray(data.hoy_horas) && data.hoy_horas[0]) || {};
+  const dia0 = (Array.isArray(data.proximos_dias) && data.proximos_dias[0]) || {};
+
+  const uv = primerValorDefinido(
+    actual.uv, actual.uv_max, actual.indice_uv, actual.radiacion_uv,
+    dia0.uv, dia0.uv_max, dia0.indice_uv,
+    hora0.uv, hora0.indice_uv
+  );
+
+  const nieveRaw = primerValorDefinido(
+    actual.cota_nieve, actual.cotaNieve, actual.nieve,
+    hora0.cota_nieve, hora0.cotaNieve, hora0.nieve,
+    dia0.cota_nieve, dia0.cotaNieve, dia0.nieve
+  );
+
+  const tormenta = primerValorDefinido(
+    actual.prob_tormenta, actual.probTormenta, actual.tormenta,
+    hora0.prob_tormenta, hora0.probTormenta, hora0.tormenta,
+    dia0.prob_tormenta, dia0.probTormenta, dia0.tormenta
+  );
+
+  const sensacion = primerValorDefinido(
+    actual.sensacion_termica, actual.sensTermica, actual.sens_termica, actual.sensacion,
+    hora0.sensacion_termica, hora0.sensTermica, hora0.sens_termica, hora0.sensacion,
+    actual.temperatura
+  );
+
+  const racha = primerValorDefinido(
+    actual.rachas_viento, actual.racha_max, actual.rachaMax, actual.racha_viento, actual.racha,
+    hora0.rachas_viento, hora0.racha_max, hora0.racha_viento, hora0.racha,
+    dia0.rachas_viento, dia0.racha_max, dia0.racha_viento, dia0.racha,
+    actual.viento_kmh
+  );
+
+  const direccion = primerValorDefinido(
+    actual.direccion_viento, actual.viento_direccion, actual.viento_dir, actual.dir_viento, actual.direccion,
+    hora0.direccion_viento, hora0.viento_direccion, hora0.viento_dir, hora0.dir_viento, hora0.direccion,
+    dia0.direccion_viento, dia0.viento_direccion, dia0.viento_dir, dia0.dir_viento, dia0.direccion
+  );
+
+  return { uv, nieveRaw, tormenta, sensacion, racha, direccion };
+}
+
 /* --- LÓGICA METEOROLÓGICA --- */
 async function cargarTiempo(ine) {
   setEstadoCarga(true);
@@ -114,7 +239,8 @@ async function cargarTiempo(ine) {
     const res = await fetch(`${WORKER_URL}?ine=${ine}`);
     if (!res.ok) throw new Error('Error en la red');
     currentWeatherData = await res.json();
-    
+    diaSeleccionadoIndex = null;
+
     localStorage.setItem('saved_ine', ine);
     renderizarUI();
   } catch (error) {
@@ -126,34 +252,84 @@ async function cargarTiempo(ine) {
   }
 }
 
-function renderizarCarrusel(horasArray, titulo = "Próximas horas") {
+function renderizarCarrusel(horasArray, titulo = "Próximas horas", esDiaFuturo = false) {
   const tituloEl = document.getElementById('titulo-carrusel-horas');
-  tituloEl.textContent = titulo;
-  
-  // Resaltado visual sutil al cambiar de día
-  tituloEl.classList.remove('text-text-muted');
-  tituloEl.classList.add('text-md-primary');
-  setTimeout(() => {
-    tituloEl.classList.add('text-text-muted');
-    tituloEl.classList.remove('text-md-primary');
-  }, 1200);
+  const btnVolverHoy = document.getElementById('btn-volver-hoy');
+
+  if (tituloEl) {
+    tituloEl.textContent = titulo;
+    tituloEl.classList.remove('text-text-muted');
+    tituloEl.classList.add('text-md-primary');
+    setTimeout(() => {
+      tituloEl.classList.add('text-text-muted');
+      tituloEl.classList.remove('text-md-primary');
+    }, 900);
+  }
+
+  if (btnVolverHoy) {
+    if (esDiaFuturo) {
+      btnVolverHoy.classList.remove('hidden');
+      btnVolverHoy.classList.add('flex');
+    } else {
+      btnVolverHoy.classList.add('hidden');
+      btnVolverHoy.classList.remove('flex');
+    }
+  }
 
   const carrusel = document.getElementById('ui-carrusel-horas');
+  if (!carrusel) return;
   carrusel.innerHTML = '';
   carrusel.scrollTo({ left: 0, behavior: 'smooth' });
 
   horasArray.forEach(hora => {
+    const probPrecip = primerValorDefinido(hora.prob_precipitacion, hora.precipitacion, hora.prob_lluvia, 0);
+
+    // Datos opcionales por hora si el usuario activó alguno y el objeto horario lo incluye
+    let detallesExtraHoraHTML = '';
+    const itemsExtraHora = [];
+
+    if (advPrefs.sensacion) {
+      const st = primerValorDefinido(hora.sensacion_termica, hora.sens_termica, hora.sensTermica, hora.sensacion);
+      if (st !== undefined) itemsExtraHora.push(`ST ${st}°`);
+    }
+    if (advPrefs.tormenta) {
+      const torm = primerValorDefinido(hora.prob_tormenta, hora.probTormenta, hora.tormenta);
+      if (torm !== undefined) itemsExtraHora.push(`⚡ ${torm}%`);
+    }
+    if (advPrefs.viento) {
+      const rachaH = primerValorDefinido(hora.rachas_viento, hora.racha_max, hora.racha, hora.viento_kmh);
+      const dirH = primerValorDefinido(hora.direccion_viento, hora.viento_dir, hora.direccion, '');
+      if (rachaH !== undefined) itemsExtraHora.push(`${rachaH}km/h${dirH ? ' ' + dirH : ''}`);
+    }
+    if (advPrefs.nieve) {
+      const nieveH = primerValorDefinido(hora.cota_nieve, hora.cotaNieve, hora.nieve);
+      if (nieveH !== undefined && nieveH !== '0' && nieveH !== 0) {
+        const nieveTxt = String(nieveH).endsWith('m') ? nieveH : `${nieveH}m`;
+        itemsExtraHora.push(`❄ ${nieveTxt}`);
+      }
+    }
+
+    if (itemsExtraHora.length > 0) {
+      detallesExtraHoraHTML = `
+        <div class="w-full border-t border-border-color/60 mt-2 pt-1.5 flex flex-col items-center gap-0.5 text-[10px] text-text-muted font-medium leading-tight text-center">
+          ${itemsExtraHora.map(txt => `<span class="truncate max-w-full">${txt}</span>`).join('')}
+        </div>
+      `;
+    }
+
     const card = document.createElement('div');
-    card.className = 'snap-start shrink-0 bg-md-surface-container rounded-2xl p-4 pt-3 pb-3 flex flex-col items-center w-[84px] shadow-sm';
-    
+    const anchoCard = itemsExtraHora.length > 0 ? 'w-[96px]' : 'w-[84px]';
+    card.className = `snap-start shrink-0 bg-md-surface-container rounded-2xl p-3.5 flex flex-col items-center ${anchoCard} shadow-sm transition-all`;
+
     card.innerHTML = `
-      <span class="text-xs font-medium mb-1 text-text-muted">${hora.hora}</span>
-      <span class="material-symbols-rounded text-[32px] text-md-primary mb-1">${hora.icono}</span>
-      <span class="text-[17px] font-semibold text-text-main leading-none mb-1">${hora.temperatura}°</span>
-      <div class="flex items-center gap-[2px] text-md-primary mt-auto">
+      <span class="text-xs font-medium mb-1.5 text-text-muted">${hora.hora}</span>
+      <span class="material-symbols-rounded text-[30px] text-md-primary mb-1.5">${hora.icono || 'cloud'}</span>
+      <span class="text-[17px] font-semibold text-text-main leading-none mb-1.5">${hora.temperatura}°</span>
+      <div class="flex items-center gap-[2px] text-md-primary mt-auto" title="Probabilidad de precipitación">
         <span class="material-symbols-rounded text-[14px]">water_drop</span>
-        <span class="text-[11px] font-bold">${hora.prob_precipitacion !== undefined ? hora.prob_precipitacion : 0}%</span>
+        <span class="text-[11px] font-bold">${probPrecip}%</span>
       </div>
+      ${detallesExtraHoraHTML}
     `;
     carrusel.appendChild(card);
   });
@@ -163,99 +339,185 @@ function renderizarUI() {
   if (!currentWeatherData) return;
   const data = currentWeatherData;
 
-  document.getElementById('ui-municipio').textContent = data.municipio.nombre;
-  
-  document.getElementById('ui-temp-actual').textContent = data.actual.temperatura;
-  document.getElementById('ui-desc-actual').textContent = data.actual.estado_cielo;
-  document.getElementById('ui-humedad').textContent = `${data.actual.humedad}%`;
-  document.getElementById('ui-viento').textContent = `${data.actual.viento_kmh} km/h`;
-  document.getElementById('ui-icono-actual').textContent = data.actual.icono;
+  document.getElementById('ui-municipio').textContent = data.municipio?.nombre || 'Localidad';
+  document.getElementById('ui-temp-actual').textContent = data.actual?.temperatura ?? '--';
+  document.getElementById('ui-desc-actual').textContent = data.actual?.estado_cielo ?? '--';
+  document.getElementById('ui-humedad').textContent = `${data.actual?.humedad ?? '--'}%`;
+  document.getElementById('ui-viento').textContent = `${data.actual?.viento_kmh ?? '--'} km/h`;
+  document.getElementById('ui-icono-actual').textContent = data.actual?.icono || 'cloud';
 
-  // Lógica de Alertas Meteorológicas (AEMET)
+  // Alertas Meteorológicas (AEMET)
   const alertasDiv = document.getElementById('ui-alertas');
-  // Se busca en data.alertas o en el nivel base según estructura común del proxy
   const alertas = data.alertas || data.municipio?.alertas || [];
-  
-  if (alertas.length > 0) {
-    alertasDiv.classList.remove('hidden');
-    alertasDiv.classList.add('flex');
-    alertasDiv.innerHTML = alertas.map(alerta => {
-      let colors = 'bg-md-surface-container text-text-main';
-      const nivel = (alerta.nivel || '').toLowerCase();
-      if (nivel.includes('amarill')) colors = 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border border-yellow-500/30';
-      if (nivel.includes('naranj')) colors = 'bg-orange-500/20 text-orange-700 dark:text-orange-400 border border-orange-500/30';
-      if (nivel.includes('roj')) colors = 'bg-red-500/20 text-red-700 dark:text-red-400 border border-red-500/30';
-      
-      return `
-        <div class="${colors} px-3 py-1 rounded-full flex items-center gap-1.5 text-xs font-semibold shadow-sm">
-          <span class="material-symbols-rounded text-[14px]">warning</span>
-          <span>Aviso ${alerta.nivel}</span>
-        </div>
-      `;
-    }).join('');
-  } else {
-    alertasDiv.classList.add('hidden');
-    alertasDiv.classList.remove('flex');
-    alertasDiv.innerHTML = '';
+
+  if (alertasDiv) {
+    if (Array.isArray(alertas) && alertas.length > 0) {
+      alertasDiv.classList.remove('hidden');
+      alertasDiv.classList.add('flex');
+      alertasDiv.innerHTML = alertas.map(alerta => {
+        const textoNivel = typeof alerta === 'string' ? alerta : (alerta.nivel || alerta.tipo || 'Activo');
+        const fenomeno = typeof alerta === 'object' && alerta.fenomeno ? ` · ${alerta.fenomeno}` : '';
+        const nivelNorm = textoNivel.toLowerCase();
+
+        let badgeStyle = 'background-color: rgba(148, 163, 184, 0.2); border: 1px solid rgba(148, 163, 184, 0.4);';
+        if (nivelNorm.includes('amarill')) {
+          badgeStyle = 'background-color: rgba(234, 179, 8, 0.18); border: 1px solid rgba(234, 179, 8, 0.45); color: #ca8a04;';
+        } else if (nivelNorm.includes('naranj')) {
+          badgeStyle = 'background-color: rgba(249, 115, 22, 0.18); border: 1px solid rgba(249, 115, 22, 0.45); color: #ea580c;';
+        } else if (nivelNorm.includes('roj')) {
+          badgeStyle = 'background-color: rgba(239, 68, 68, 0.18); border: 1px solid rgba(239, 68, 68, 0.45); color: #dc2626;';
+        }
+
+        return `
+          <div style="${badgeStyle}" class="px-3 py-1 rounded-full flex items-center gap-1.5 text-xs font-semibold shadow-sm">
+            <span class="material-symbols-rounded text-[15px]">warning</span>
+            <span>Aviso ${textoNivel}${fenomeno}</span>
+          </div>
+        `;
+      }).join('');
+    } else {
+      alertasDiv.classList.add('hidden');
+      alertasDiv.classList.remove('flex');
+      alertasDiv.innerHTML = '';
+    }
   }
 
-  // Lógica de Previsión Completa seleccionada
+  // Datos extra configurables por el usuario
   const extraDiv = document.getElementById('ui-datos-extra');
-  const showAnyAdv = Object.values(advPrefs).some(val => val);
-  
+  const showAnyAdv = Object.values(advPrefs).some(Boolean);
+
   if (showAnyAdv && extraDiv) {
     extraDiv.classList.remove('hidden');
-    extraDiv.classList.add('grid');
-    let extraHTML = '';
-    
-    if (advPrefs.uv && data.actual.uv !== undefined) extraHTML += `<div class="flex flex-col items-center justify-center gap-1 bg-md-surface/80 p-2.5 rounded-xl"><span class="material-symbols-rounded text-[20px] text-md-primary">routine</span> <span class="text-[11px] font-semibold uppercase tracking-wide">UV: ${data.actual.uv}</span></div>`;
-    if (advPrefs.nieve && data.actual.cota_nieve !== undefined && data.actual.cota_nieve !== null && data.actual.cota_nieve !== "") extraHTML += `<div class="flex flex-col items-center justify-center gap-1 bg-md-surface/80 p-2.5 rounded-xl"><span class="material-symbols-rounded text-[20px] text-md-primary">ac_unit</span> <span class="text-[11px] font-semibold uppercase tracking-wide">Nieve: ${data.actual.cota_nieve}m</span></div>`;
-    if (advPrefs.tormenta && data.actual.prob_tormenta !== undefined) extraHTML += `<div class="flex flex-col items-center justify-center gap-1 bg-md-surface/80 p-2.5 rounded-xl"><span class="material-symbols-rounded text-[20px] text-md-primary">thunderstorm</span> <span class="text-[11px] font-semibold uppercase tracking-wide">Tormentas: ${data.actual.prob_tormenta}%</span></div>`;
-    if (advPrefs.sensacion && data.actual.sensacion_termica !== undefined) extraHTML += `<div class="flex flex-col items-center justify-center gap-1 bg-md-surface/80 p-2.5 rounded-xl"><span class="material-symbols-rounded text-[20px] text-md-primary">thermostat</span> <span class="text-[11px] font-semibold uppercase tracking-wide">Sensación: ${data.actual.sensacion_termica}°</span></div>`;
-    if (advPrefs.viento && (data.actual.rachas_viento !== undefined || data.actual.direccion_viento !== undefined)) extraHTML += `<div class="flex flex-col items-center justify-center gap-1 bg-md-surface/80 p-2.5 rounded-xl"><span class="material-symbols-rounded text-[20px] text-md-primary">airwave</span> <span class="text-[11px] font-semibold uppercase tracking-wide text-center leading-tight">Racha: ${data.actual.rachas_viento || '--'}km/h ${data.actual.direccion_viento || ''}</span></div>`;
-    
-    if (extraHTML === '') {
-      extraHTML = `<div class="col-span-full text-center text-xs text-text-muted py-2">Datos seleccionados no disponibles hoy.</div>`;
+    extraDiv.classList.add('flex');
+
+    const { uv, nieveRaw, tormenta, sensacion, racha, direccion } = extraerDatosAvanzadosActuales(data);
+    const tarjetasExtra = [];
+
+    const crearChipExtra = (icono, etiqueta, valor) => `
+      <div class="flex items-center gap-2.5 bg-md-surface/75 px-3.5 py-2.5 rounded-2xl border border-border-color/60 flex-1 min-w-[138px] max-w-[210px]">
+        <span class="material-symbols-rounded text-[20px] text-md-primary shrink-0">${icono}</span>
+        <div class="flex flex-col min-w-0">
+          <span class="text-[10px] font-semibold uppercase tracking-wider text-text-muted leading-none truncate">${etiqueta}</span>
+          <span class="text-sm font-semibold text-text-main leading-tight mt-1 truncate">${valor}</span>
+        </div>
+      </div>
+    `;
+
+    if (advPrefs.sensacion) {
+      const valSens = sensacion !== undefined ? `${sensacion}°` : '--°';
+      tarjetasExtra.push(crearChipExtra('thermostat', 'Sensación', valSens));
     }
-    extraDiv.innerHTML = extraHTML;
+
+    if (advPrefs.uv) {
+      const valUv = uv !== undefined ? `${uv}` : '--';
+      tarjetasExtra.push(crearChipExtra('wb_sunny', 'Índice UV', valUv));
+    }
+
+    if (advPrefs.tormenta) {
+      const valTormenta = tormenta !== undefined ? `${tormenta}%` : '0%';
+      tarjetasExtra.push(crearChipExtra('thunderstorm', 'Tormenta', valTormenta));
+    }
+
+    if (advPrefs.nieve) {
+      let valNieve = 'Sin nieve';
+      if (nieveRaw !== undefined && nieveRaw !== 0 && nieveRaw !== '0') {
+        valNieve = String(nieveRaw).endsWith('m') ? String(nieveRaw) : `${nieveRaw} m`;
+      }
+      tarjetasExtra.push(crearChipExtra('ac_unit', 'Cota nieve', valNieve));
+    }
+
+    if (advPrefs.viento) {
+      const velTxt = racha !== undefined ? `${racha} km/h` : '-- km/h';
+      const dirTxt = direccion ? ` ${direccion}` : '';
+      tarjetasExtra.push(crearChipExtra('air', 'Rachas viento', `${velTxt}${dirTxt}`));
+    }
+
+    extraDiv.innerHTML = tarjetasExtra.join('');
   } else if (extraDiv) {
     extraDiv.classList.add('hidden');
-    extraDiv.classList.remove('grid');
+    extraDiv.classList.remove('flex');
+    extraDiv.innerHTML = '';
   }
 
-  renderizarCarrusel(data.hoy_horas.slice(0, 24), "Próximas horas");
+  // Renderizado del carrusel según si hay un día seleccionado o las próximas 24h
+  const horasHoy24 = Array.isArray(data.hoy_horas) ? data.hoy_horas.slice(0, 24) : [];
+  if (diaSeleccionadoIndex !== null && data.proximos_dias?.[diaSeleccionadoIndex]) {
+    const diaSel = data.proximos_dias[diaSeleccionadoIndex];
+    const horasDiaSel = obtenerHorasParaDia(data, diaSel, diaSeleccionadoIndex);
+    if (horasDiaSel.length > 0) {
+      renderizarCarrusel(horasDiaSel, `Horas: ${diaSel.dia_semana}`, true);
+    } else {
+      diaSeleccionadoIndex = null;
+      renderizarCarrusel(horasHoy24, "Próximas horas", false);
+    }
+  } else {
+    renderizarCarrusel(horasHoy24, "Próximas horas", false);
+  }
 
+  // Renderizado de Próximos días
+  renderizarListaDias(data);
+}
+
+function renderizarListaDias(data) {
   const lista = document.getElementById('ui-lista-dias');
+  if (!lista || !Array.isArray(data.proximos_dias)) return;
   lista.innerHTML = '';
+
   data.proximos_dias.forEach((dia, index) => {
-    if (index === 0) return; 
-    
-    // Verificamos de forma segura si la API provee el arreglo de horas para este día
-    const hasHoras = dia.horas && Array.isArray(dia.horas) && dia.horas.length > 0;
+    if (index === 0) return;
+
+    const horasDelDia = obtenerHorasParaDia(data, dia, index);
+    const hasHoras = horasDelDia.length > 0;
+    const isSelected = diaSeleccionadoIndex === index;
+
     const row = document.createElement('div');
-    
-    row.className = `flex justify-between items-center p-4 border-b border-border-color last:border-0 transition ${hasHoras ? 'cursor-pointer hover:bg-md-surface-container active:bg-md-surface-container-high' : ''}`;
-    
+    const clasesInteractivas = hasHoras
+      ? 'cursor-pointer hover:bg-md-surface-container-high/60 active:bg-md-surface-container-high'
+      : '';
+    const clasesSeleccionado = isSelected
+      ? 'bg-md-surface-container-high/80 border-l-4 border-l-md-primary'
+      : '';
+
+    row.className = `flex justify-between items-center p-4 border-b border-border-color last:border-0 transition-all ${clasesInteractivas} ${clasesSeleccionado}`;
+
     if (hasHoras) {
       row.onclick = () => {
-        renderizarCarrusel(dia.horas, `Horas: ${dia.dia_semana}`);
-        // Scroll suave al top para que el usuario vea que ha cambiado el carrusel
-        window.scrollTo({ top: document.getElementById('header-top').offsetTop, behavior: 'smooth' });
+        if (diaSeleccionadoIndex === index) {
+          // Si ya estaba activo, volver a las próximas horas de hoy
+          diaSeleccionadoIndex = null;
+          renderizarUI();
+        } else {
+          diaSeleccionadoIndex = index;
+          renderizarUI();
+          const seccionHoras = document.getElementById('seccion-horas');
+          if (seccionHoras) {
+            const y = seccionHoras.getBoundingClientRect().top + window.scrollY - 16;
+            window.scrollTo({ top: y, behavior: 'smooth' });
+          }
+        }
       };
     }
 
+    const probPrecipDia = primerValorDefinido(dia.prob_precipitacion, dia.precipitacion, 0);
+
     row.innerHTML = `
-      <span class="w-24 font-medium text-text-main">${dia.dia_semana}</span>
-      <div class="flex items-center gap-1 w-16">
-        <span class="material-symbols-rounded text-md-primary">${dia.icono}</span>
-        ${dia.prob_precipitacion > 0 ? `<span class="text-xs text-md-primary font-bold">${dia.prob_precipitacion}%</span>` : ''}
+      <div class="flex flex-col w-28">
+        <span class="font-medium text-text-main leading-tight">${dia.dia_semana}</span>
+        ${hasHoras ? `<span class="text-[11px] text-md-primary font-medium mt-0.5">${isSelected ? 'Viendo por horas' : 'Ver por horas'}</span>` : ''}
+      </div>
+      <div class="flex items-center gap-1.5 w-20">
+        <span class="material-symbols-rounded text-md-primary text-[24px]">${dia.icono || 'cloud'}</span>
+        <span class="text-xs font-bold ${probPrecipDia > 0 ? 'text-md-primary' : 'text-text-muted/60'}">${probPrecipDia}%</span>
       </div>
       <div class="flex gap-1 text-right w-auto items-center">
         <div class="flex gap-3 w-20 justify-end">
-          <span class="font-medium text-text-main">${dia.temp_max}°</span>
+          <span class="font-semibold text-text-main">${dia.temp_max}°</span>
           <span class="text-text-muted">${dia.temp_min}°</span>
         </div>
-        ${hasHoras ? `<span class="material-symbols-rounded text-text-muted text-lg ml-1 opacity-70">chevron_right</span>` : `<span class="w-5 ml-1"></span>`}
+        ${hasHoras
+          ? `<span class="material-symbols-rounded text-lg ml-1 transition-transform ${isSelected ? 'text-md-primary rotate-90' : 'text-text-muted opacity-70'}">chevron_right</span>`
+          : `<span class="w-5 ml-1"></span>`
+        }
       </div>
     `;
     lista.appendChild(row);
@@ -263,24 +525,25 @@ function renderizarUI() {
 }
 
 function calcularDistancia(lat1, lon1, lat2, lon2) {
-  const R = 6371; 
+  const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
             Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-            Math.sin(dLon/2) * Math.sin(dLon/2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
   const btnTiempo = document.getElementById('btn-tiempo');
+  const btnVolverHoy = document.getElementById('btn-volver-hoy');
   const btnSearch = document.getElementById('btn-search');
   const searchModal = document.getElementById('search-modal');
   const btnCloseSearch = document.getElementById('btn-close-search');
   const searchInput = document.getElementById('search-input');
   const searchResults = document.getElementById('search-results');
-  
+
   const btnGps = document.getElementById('btn-gps');
   const iconoGps = document.getElementById('icono-gps');
   const textoGps = document.getElementById('texto-gps');
@@ -294,7 +557,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const colorBtns = document.querySelectorAll('.color-btn');
   const colorPicker = document.getElementById('custom-color-picker');
   const customColorPreview = document.getElementById('custom-color-preview');
-  
+
   const btnToggleAdvMenu = document.getElementById('btn-toggle-advanced-menu');
   const advMenuIcon = document.getElementById('advanced-menu-icon');
   const advOptionsList = document.getElementById('advanced-options-list');
@@ -338,13 +601,21 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (btnCloseOptions) btnCloseOptions.addEventListener('click', closeOptionsModal);
 
+  if (btnVolverHoy) {
+    btnVolverHoy.addEventListener('click', () => {
+      diaSeleccionadoIndex = null;
+      renderizarUI();
+    });
+  }
+
   if (btnTiempo) {
     btnTiempo.addEventListener('click', () => {
       closeSearchModal();
       closeOptionsModal();
       closeIosModal();
       if (currentWeatherData) {
-        renderizarCarrusel(currentWeatherData.hoy_horas.slice(0, 24), "Próximas horas");
+        diaSeleccionadoIndex = null;
+        renderizarUI();
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
     });
@@ -375,13 +646,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       searchResults.innerHTML = '';
       return;
     }
-    
+
     const isNumber = /^\d+$/.test(query);
     const filtrados = municipiosDB.filter(m => {
       if (isNumber) return m.cps && m.cps.some(cp => cp.startsWith(query));
       return m._nombreNorm.includes(query) || m._provNorm.includes(query);
-    }).slice(0, 15); 
-    
+    }).slice(0, 15);
+
     if (filtrados.length === 0) {
       searchResults.innerHTML = `<div class="p-8 text-center text-text-muted">No se encontraron municipios para "${queryRaw}"</div>`;
       return;
@@ -475,7 +746,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       optionsPanel.classList.remove('translate-y-full');
     });
   }
-  
+
   if (optionsOverlay) optionsOverlay.addEventListener('click', closeOptionsModal);
 
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -513,7 +784,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  /* --- AJUSTES UI --- */
+  /* --- AJUSTES DE TEMA Y COLOR --- */
   const updateSettingsUI = () => {
     const currentTheme = localStorage.getItem('app_theme') || 'system';
     const currentColor = localStorage.getItem('app_color') || 'blue';
@@ -568,31 +839,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     const savedColorInit = localStorage.getItem('app_color') || 'blue';
     if (savedColorInit.startsWith('#')) colorPicker.value = savedColorInit;
 
-    colorPicker.addEventListener('input', (e) => {
+    const aplicarColorPersonalizado = (e) => {
       const hex = e.target.value;
       localStorage.setItem('app_color', hex);
       document.documentElement.setAttribute('data-color', 'custom');
       updateSettingsUI();
-    });
+    };
+
+    colorPicker.addEventListener('input', aplicarColorPersonalizado);
+    colorPicker.addEventListener('change', aplicarColorPersonalizado);
   }
 
-  // --- Lógica del desplegable de Previsión Completa ---
+  /* --- DESPLEGABLE DE DATOS METEOROLÓGICOS EXTRA --- */
   if (btnToggleAdvMenu) {
     btnToggleAdvMenu.addEventListener('click', () => {
       advOptionsList.classList.toggle('hidden');
       advOptionsList.classList.toggle('flex');
-      if (advOptionsList.classList.contains('hidden')) {
-        advMenuIcon.style.transform = 'rotate(0deg)';
-      } else {
-        advMenuIcon.style.transform = 'rotate(180deg)';
-      }
+      advMenuIcon.style.transform = advOptionsList.classList.contains('hidden')
+        ? 'rotate(0deg)'
+        : 'rotate(180deg)';
     });
   }
 
-  // Inicializar estado visual de los checkboxes basado en advPrefs
   advCheckboxes.forEach(checkbox => {
     const key = checkbox.dataset.key;
-    if (advPrefs[key]) checkbox.checked = true;
+    checkbox.checked = Boolean(advPrefs[key]);
 
     checkbox.addEventListener('change', (e) => {
       advPrefs[key] = e.target.checked;
