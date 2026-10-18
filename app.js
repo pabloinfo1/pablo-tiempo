@@ -3,7 +3,7 @@ let municipiosDB = [];
 let municipiosCargando = true;
 let deferredInstallPrompt = null;
 let currentWeatherData = null;
-let diaSeleccionadoIndex = null; // null = Próximas 24h (Hoy), >0 = Día seleccionado
+let diaSeleccionadoIndex = null; // null = Próximas 24h desde hora actual, >0 = Día futuro seleccionado
 
 const DEFAULT_ADV_PREFS = {
   uv: false,
@@ -38,6 +38,43 @@ function primerValorDefinido(...valores) {
     if (val !== undefined && val !== null && val !== '') return val;
   }
   return undefined;
+}
+
+/**
+ * Parsea la precipitación acumulada en mm (l/m²) sin confundirla nunca con porcentaje.
+ * Soporta "Ip" (Inapreciable) de AEMET convirtiéndolo en 0.1 mm.
+ */
+function parsearPrecipitacionMm(valorRaw) {
+  if (valorRaw === undefined || valorRaw === null || valorRaw === '') return 0;
+  const str = String(valorRaw).trim().toLowerCase();
+  if (str === 'ip') return 0.1;
+  const num = parseFloat(str.replace(',', '.'));
+  return (!isNaN(num) && num > 0) ? num : 0;
+}
+
+/**
+ * Parsea estrictamente la probabilidad de precipitación en % (0 - 100).
+ */
+function parsearProbabilidadPct(valorRaw) {
+  if (valorRaw === undefined || valorRaw === null || valorRaw === '') return null;
+  const num = parseInt(String(valorRaw).trim(), 10);
+  if (isNaN(num)) return null;
+  return Math.max(0, Math.min(100, num));
+}
+
+function extraerNumeroHora(horaStr) {
+  if (horaStr === undefined || horaStr === null) return null;
+  const limpia = String(horaStr).trim();
+  const partes = limpia.split(':');
+  const num = parseInt(partes[0], 10);
+  return isNaN(num) ? null : num;
+}
+
+function obtenerFechaLocalISO(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 let toastTimeout;
@@ -132,7 +169,7 @@ function inicializarPWA() {
 
 inicializarPWA();
 
-/* --- PROCESAMIENTO DE DATOS POR HORAS Y DÍAS --- */
+/* --- PROCESAMIENTO Y SINCRONIZACIÓN HORARIA --- */
 function agruparHorasPorSaltosDeDia(horasTotales) {
   if (!Array.isArray(horasTotales) || horasTotales.length === 0) return [];
   const grupos = [[]];
@@ -140,16 +177,14 @@ function agruparHorasPorSaltosDeDia(horasTotales) {
   let horaAnteriorNum = null;
 
   horasTotales.forEach((item, idx) => {
-    const horaStr = String(item.hora || '');
-    const horaNum = parseInt(horaStr.split(':')[0], 10);
-
-    if (idx > 0 && !isNaN(horaNum) && horaAnteriorNum !== null) {
+    const horaNum = extraerNumeroHora(item.hora);
+    if (idx > 0 && horaNum !== null && horaAnteriorNum !== null) {
       if (horaNum < horaAnteriorNum) {
         diaActualIdx++;
         grupos[diaActualIdx] = [];
       }
     }
-    if (!isNaN(horaNum)) horaAnteriorNum = horaNum;
+    if (horaNum !== null) horaAnteriorNum = horaNum;
     grupos[diaActualIdx].push(item);
   });
 
@@ -159,23 +194,19 @@ function agruparHorasPorSaltosDeDia(horasTotales) {
 function obtenerHorasParaDia(data, diaObj, indexEnLista) {
   if (!data || !diaObj) return [];
 
-  // 1. Si el objeto del día ya incluye el array de horas directamente
   if (Array.isArray(diaObj.horas) && diaObj.horas.length > 0) {
     return diaObj.horas;
   }
   if (Array.isArray(diaObj.hoy_horas) && diaObj.hoy_horas.length > 0) {
     return diaObj.hoy_horas;
   }
-
-  // 2. Si existe una estructura indexada en la raíz del JSON
   if (Array.isArray(data.horas_por_dia?.[indexEnLista]) && data.horas_por_dia[indexEnLista].length > 0) {
     return data.horas_por_dia[indexEnLista];
   }
 
-  // 3. Si todas las horas (48h de AEMET) vienen dentro de data.hoy_horas
   if (Array.isArray(data.hoy_horas) && data.hoy_horas.length > 0) {
     if (diaObj.fecha) {
-      const porFecha = data.hoy_horas.filter(h => h.fecha && h.fecha === diaObj.fecha);
+      const porFecha = data.hoy_horas.filter(h => h.fecha && String(h.fecha).startsWith(String(diaObj.fecha).slice(0, 10)));
       if (porFecha.length > 0) return porFecha;
     }
     const grupos = agruparHorasPorSaltosDeDia(data.hoy_horas);
@@ -187,57 +218,198 @@ function obtenerHorasParaDia(data, diaObj, indexEnLista) {
   return [];
 }
 
-function extraerDatosAvanzadosActuales(data) {
-  const actual = data.actual || {};
-  const hora0 = (Array.isArray(data.hoy_horas) && data.hoy_horas[0]) || {};
+/**
+ * Sincroniza la lista de próximas horas y los datos actuales con el reloj local del usuario,
+ * descartando horas ya pasadas aunque el JSON provenga de la caché de 30 minutos.
+ */
+function obtenerEstadoSincronizado(data) {
+  const ahora = new Date();
+  const fechaHoyISO = obtenerFechaLocalISO(ahora);
+  const horaActualNum = ahora.getHours();
+
+  // Reunir todas las horas disponibles en secuencia cronológica
+  let poolHoras = [];
+  if (Array.isArray(data.hoy_horas) && data.hoy_horas.length > 0) {
+    poolHoras = [...data.hoy_horas];
+  } else if (Array.isArray(data.proximos_dias)) {
+    data.proximos_dias.forEach((d, idx) => {
+      const hDia = obtenerHorasParaDia(data, d, idx);
+      if (hDia.length > 0) {
+        poolHoras.push(...hDia.map(h => ({ ...h, _diaIdx: idx, fecha: h.fecha || d.fecha })));
+      }
+    });
+  }
+
+  let horasFuturas = [];
+
+  if (poolHoras.length > 0) {
+    const tienenFecha = poolHoras.some(h => Boolean(h.fecha));
+
+    if (tienenFecha) {
+      horasFuturas = poolHoras.filter(h => {
+        const fechaItem = String(h.fecha || '').slice(0, 10);
+        const horaNum = extraerNumeroHora(h.hora);
+        if (!fechaItem || horaNum === null) return true;
+        if (fechaItem > fechaHoyISO) return true;
+        if (fechaItem === fechaHoyISO) return horaNum >= horaActualNum;
+        return false;
+      });
+    } else {
+      // Si el JSON no trae campo fecha en cada hora, agrupamos por saltos de medianoche (00:00)
+      const grupos = agruparHorasPorSaltosDeDia(poolHoras);
+      const grupoHoy = (grupos[0] || []).filter(h => {
+        const horaNum = extraerNumeroHora(h.hora);
+        return horaNum === null || horaNum >= horaActualNum;
+      });
+      const restoGrupos = grupos.slice(1).flat();
+      horasFuturas = [...grupoHoy, ...restoGrupos];
+    }
+  }
+
+  if (horasFuturas.length === 0 && poolHoras.length > 0) {
+    horasFuturas = poolHoras;
+  }
+
+  const proximas24Horas = horasFuturas.slice(0, 24);
+  const horaEnCurso = proximas24Horas[0] || {};
+  const baseActual = data.actual || {};
+
+  // Sincronizar tarjeta principal con la hora actual real
+  const actualSincronizado = {
+    ...baseActual,
+    hora: primerValorDefinido(horaEnCurso.hora, baseActual.hora),
+    temperatura: primerValorDefinido(horaEnCurso.temperatura, baseActual.temperatura),
+    estado_cielo: primerValorDefinido(horaEnCurso.estado_cielo, baseActual.estado_cielo),
+    icono: primerValorDefinido(horaEnCurso.icono, baseActual.icono, 'cloud'),
+    humedad: primerValorDefinido(horaEnCurso.humedad, baseActual.humedad),
+    viento_kmh: primerValorDefinido(horaEnCurso.viento_kmh, baseActual.viento_kmh),
+    sensacion_termica: primerValorDefinido(
+      horaEnCurso.sensacion_termica, horaEnCurso.sensTermica, horaEnCurso.sens_termica,
+      baseActual.sensacion_termica, baseActual.sensTermica, baseActual.sens_termica,
+      horaEnCurso.temperatura, baseActual.temperatura
+    ),
+    prob_precipitacion: primerValorDefinido(
+      horaEnCurso.prob_precipitacion, horaEnCurso.probPrecipitacion, horaEnCurso.prob_lluvia,
+      baseActual.prob_precipitacion, baseActual.probPrecipitacion
+    ),
+    precipitacion_mm: primerValorDefinido(
+      horaEnCurso.precipitacion_mm, horaEnCurso.lluvia_mm, horaEnCurso.precipitacion,
+      baseActual.precipitacion_mm, baseActual.lluvia_mm, baseActual.precipitacion
+    ),
+    cota_nieve: primerValorDefinido(
+      horaEnCurso.cota_nieve, horaEnCurso.cotaNieve,
+      baseActual.cota_nieve, baseActual.cotaNieve
+    ),
+    prob_tormenta: primerValorDefinido(
+      horaEnCurso.prob_tormenta, horaEnCurso.probTormenta,
+      baseActual.prob_tormenta, baseActual.probTormenta
+    ),
+    rachas_viento: primerValorDefinido(
+      horaEnCurso.rachas_viento, horaEnCurso.racha_max, horaEnCurso.racha,
+      baseActual.rachas_viento, baseActual.racha_max, baseActual.racha
+    ),
+    direccion_viento: primerValorDefinido(
+      horaEnCurso.direccion_viento, horaEnCurso.viento_dir, horaEnCurso.direccion,
+      baseActual.direccion_viento, baseActual.viento_dir, baseActual.direccion
+    ),
+    uv: primerValorDefinido(
+      horaEnCurso.uv, baseActual.uv, baseActual.uv_max, baseActual.indice_uv
+    )
+  };
+
+  return { actualSincronizado, proximas24Horas };
+}
+
+function extraerDatosAvanzadosActuales(data, actualSincronizado) {
+  const actual = actualSincronizado || data.actual || {};
   const dia0 = (Array.isArray(data.proximos_dias) && data.proximos_dias[0]) || {};
 
   const uv = primerValorDefinido(
     actual.uv, actual.uv_max, actual.indice_uv, actual.radiacion_uv,
-    dia0.uv, dia0.uv_max, dia0.indice_uv,
-    hora0.uv, hora0.indice_uv
+    dia0.uv, dia0.uv_max, dia0.indice_uv
   );
 
   const nieveRaw = primerValorDefinido(
     actual.cota_nieve, actual.cotaNieve, actual.nieve,
-    hora0.cota_nieve, hora0.cotaNieve, hora0.nieve,
     dia0.cota_nieve, dia0.cotaNieve, dia0.nieve
   );
 
   const tormenta = primerValorDefinido(
     actual.prob_tormenta, actual.probTormenta, actual.tormenta,
-    hora0.prob_tormenta, hora0.probTormenta, hora0.tormenta,
     dia0.prob_tormenta, dia0.probTormenta, dia0.tormenta
   );
 
   const sensacion = primerValorDefinido(
     actual.sensacion_termica, actual.sensTermica, actual.sens_termica, actual.sensacion,
-    hora0.sensacion_termica, hora0.sensTermica, hora0.sens_termica, hora0.sensacion,
     actual.temperatura
   );
 
   const racha = primerValorDefinido(
     actual.rachas_viento, actual.racha_max, actual.rachaMax, actual.racha_viento, actual.racha,
-    hora0.rachas_viento, hora0.racha_max, hora0.racha_viento, hora0.racha,
     dia0.rachas_viento, dia0.racha_max, dia0.racha_viento, dia0.racha,
     actual.viento_kmh
   );
 
   const direccion = primerValorDefinido(
     actual.direccion_viento, actual.viento_direccion, actual.viento_dir, actual.dir_viento, actual.direccion,
-    hora0.direccion_viento, hora0.viento_direccion, hora0.viento_dir, hora0.dir_viento, hora0.direccion,
     dia0.direccion_viento, dia0.viento_direccion, dia0.viento_dir, dia0.dir_viento, dia0.direccion
   );
 
   return { uv, nieveRaw, tormenta, sensacion, racha, direccion };
 }
 
+/**
+ * Recopila y normaliza todas las alertas meteorológicas presentes en la respuesta.
+ */
+function extraerAlertasActivas(data) {
+  if (!data) return [];
+  const fuentes = [
+    data.alertas,
+    data.avisos,
+    data.municipio?.alertas,
+    data.municipio?.avisos,
+    data.actual?.alertas,
+    data.proximos_dias?.[0]?.alertas
+  ];
+
+  const listaBruta = [];
+  fuentes.forEach(f => {
+    if (Array.isArray(f)) listaBruta.push(...f);
+    else if (f && typeof f === 'object') listaBruta.push(f);
+    else if (typeof f === 'string' && f.trim() !== '') listaBruta.push({ nivel: f.trim() });
+  });
+
+  const vistas = new Set();
+  const alertasLimpias = [];
+
+  listaBruta.forEach(item => {
+    if (!item) return;
+    const nivel = typeof item === 'string'
+      ? item
+      : primerValorDefinido(item.nivel, item.level, item.riesgo, item.severidad, item.tipo, 'Aviso activo');
+    const fenomeno = typeof item === 'object'
+      ? primerValorDefinido(item.fenomeno, item.parametro, item.evento, item.titulo, '')
+      : '';
+    const descripcion = typeof item === 'object'
+      ? primerValorDefinido(item.descripcion, item.detalle, item.comentario, '')
+      : '';
+
+    const clave = `${normalizarTexto(nivel)}-${normalizarTexto(fenomeno)}`;
+    if (!vistas.has(clave)) {
+      vistas.add(clave);
+      alertasLimpias.push({ nivel, fenomeno, descripcion });
+    }
+  });
+
+  return alertasLimpias;
+}
+
 /* --- LÓGICA METEOROLÓGICA --- */
 async function cargarTiempo(ine) {
   setEstadoCarga(true);
   try {
-    const res = await fetch(`${WORKER_URL}?ine=${ine}`);
-    if (!res.ok) throw new Error('Error en la red');
+    const res = await fetch(`${WORKER_URL}?ine=${encodeURIComponent(ine)}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     currentWeatherData = await res.json();
     diaSeleccionadoIndex = null;
 
@@ -281,10 +453,38 @@ function renderizarCarrusel(horasArray, titulo = "Próximas horas", esDiaFuturo 
   carrusel.innerHTML = '';
   carrusel.scrollTo({ left: 0, behavior: 'smooth' });
 
-  horasArray.forEach(hora => {
-    const probPrecip = primerValorDefinido(hora.prob_precipitacion, hora.precipitacion, hora.prob_lluvia, 0);
+  horasArray.forEach((hora, index) => {
+    // 1. Probabilidad estrictamente en % (NUNCA usar hora.precipitacion aquí)
+    const probPrecip = parsearProbabilidadPct(
+      primerValorDefinido(hora.prob_precipitacion, hora.probPrecipitacion, hora.prob_lluvia)
+    );
 
-    // Datos opcionales por hora si el usuario activó alguno y el objeto horario lo incluye
+    // 2. Volumen acumulado estrictamente en mm (l/m²)
+    const precipMm = parsearPrecipitacionMm(
+      primerValorDefinido(hora.precipitacion_mm, hora.lluvia_mm, hora.precipitacion)
+    );
+
+    // Bloque de precipitación diferenciado (% vs mm)
+    let bloquePrecipitacionHTML = '';
+    const probMostrar = probPrecip !== null ? probPrecip : 0;
+
+    bloquePrecipitacionHTML += `
+      <div class="flex items-center gap-[2px] text-md-primary" title="Probabilidad de precipitación">
+        <span class="material-symbols-rounded text-[14px]">water_drop</span>
+        <span class="text-[11px] font-bold">${probMostrar}%</span>
+      </div>
+    `;
+
+    if (precipMm > 0) {
+      const mmFormateado = Number.isInteger(precipMm) ? precipMm : precipMm.toFixed(1).replace('.0', '');
+      bloquePrecipitacionHTML += `
+        <span class="mt-1 px-1.5 py-0.5 rounded-md bg-md-primary/15 text-md-primary text-[10px] font-semibold leading-none whitespace-nowrap" title="Precipitación acumulada prevista">
+          💧 ${mmFormateado} mm
+        </span>
+      `;
+    }
+
+    // Datos opcionales por hora
     let detallesExtraHoraHTML = '';
     const itemsExtraHora = [];
 
@@ -293,8 +493,8 @@ function renderizarCarrusel(horasArray, titulo = "Próximas horas", esDiaFuturo 
       if (st !== undefined) itemsExtraHora.push(`ST ${st}°`);
     }
     if (advPrefs.tormenta) {
-      const torm = primerValorDefinido(hora.prob_tormenta, hora.probTormenta, hora.tormenta);
-      if (torm !== undefined) itemsExtraHora.push(`⚡ ${torm}%`);
+      const torm = parsearProbabilidadPct(primerValorDefinido(hora.prob_tormenta, hora.probTormenta, hora.tormenta));
+      if (torm !== null) itemsExtraHora.push(`⚡ ${torm}%`);
     }
     if (advPrefs.viento) {
       const rachaH = primerValorDefinido(hora.rachas_viento, hora.racha_max, hora.racha, hora.viento_kmh);
@@ -317,17 +517,20 @@ function renderizarCarrusel(horasArray, titulo = "Próximas horas", esDiaFuturo 
       `;
     }
 
+    const esAhora = !esDiaFuturo && index === 0;
+    const etiquetaHora = esAhora ? 'Ahora' : (hora.hora || '--:--');
     const card = document.createElement('div');
-    const anchoCard = itemsExtraHora.length > 0 ? 'w-[96px]' : 'w-[84px]';
-    card.className = `snap-start shrink-0 bg-md-surface-container rounded-2xl p-3.5 flex flex-col items-center ${anchoCard} shadow-sm transition-all`;
+    const anchoCard = (itemsExtraHora.length > 0 || precipMm > 0) ? 'w-[96px]' : 'w-[84px]';
+    const bordeAhora = esAhora ? 'ring-1 ring-md-primary/40 bg-md-surface-container-high/70' : 'bg-md-surface-container';
+
+    card.className = `snap-start shrink-0 ${bordeAhora} rounded-2xl p-3.5 flex flex-col items-center ${anchoCard} shadow-sm transition-all`;
 
     card.innerHTML = `
-      <span class="text-xs font-medium mb-1.5 text-text-muted">${hora.hora}</span>
+      <span class="text-xs ${esAhora ? 'font-bold text-md-primary' : 'font-medium text-text-muted'} mb-1.5">${etiquetaHora}</span>
       <span class="material-symbols-rounded text-[30px] text-md-primary mb-1.5">${hora.icono || 'cloud'}</span>
-      <span class="text-[17px] font-semibold text-text-main leading-none mb-1.5">${hora.temperatura}°</span>
-      <div class="flex items-center gap-[2px] text-md-primary mt-auto" title="Probabilidad de precipitación">
-        <span class="material-symbols-rounded text-[14px]">water_drop</span>
-        <span class="text-[11px] font-bold">${probPrecip}%</span>
+      <span class="text-[17px] font-semibold text-text-main leading-none mb-2">${hora.temperatura ?? '--'}°</span>
+      <div class="flex flex-col items-center mt-auto">
+        ${bloquePrecipitacionHTML}
       </div>
       ${detallesExtraHoraHTML}
     `;
@@ -339,42 +542,64 @@ function renderizarUI() {
   if (!currentWeatherData) return;
   const data = currentWeatherData;
 
-  document.getElementById('ui-municipio').textContent = data.municipio?.nombre || 'Localidad';
-  document.getElementById('ui-temp-actual').textContent = data.actual?.temperatura ?? '--';
-  document.getElementById('ui-desc-actual').textContent = data.actual?.estado_cielo ?? '--';
-  document.getElementById('ui-humedad').textContent = `${data.actual?.humedad ?? '--'}%`;
-  document.getElementById('ui-viento').textContent = `${data.actual?.viento_kmh ?? '--'} km/h`;
-  document.getElementById('ui-icono-actual').textContent = data.actual?.icono || 'cloud';
+  const { actualSincronizado, proximas24Horas } = obtenerEstadoSincronizado(data);
 
-  // Alertas Meteorológicas (AEMET)
+  document.getElementById('ui-municipio').textContent = data.municipio?.nombre || 'Localidad';
+  document.getElementById('ui-temp-actual').textContent = actualSincronizado.temperatura ?? '--';
+  document.getElementById('ui-desc-actual').textContent = actualSincronizado.estado_cielo ?? '--';
+  document.getElementById('ui-humedad').textContent = `${actualSincronizado.humedad ?? '--'}%`;
+  document.getElementById('ui-viento').textContent = `${actualSincronizado.viento_kmh ?? '--'} km/h`;
+  document.getElementById('ui-icono-actual').textContent = actualSincronizado.icono || 'cloud';
+
+  // Alertas y Avisos Meteorológicos (AEMET)
   const alertasDiv = document.getElementById('ui-alertas');
-  const alertas = data.alertas || data.municipio?.alertas || [];
+  const alertasActivas = extraerAlertasActivas(data);
 
   if (alertasDiv) {
-    if (Array.isArray(alertas) && alertas.length > 0) {
+    if (alertasActivas.length > 0) {
       alertasDiv.classList.remove('hidden');
       alertasDiv.classList.add('flex');
-      alertasDiv.innerHTML = alertas.map(alerta => {
-        const textoNivel = typeof alerta === 'string' ? alerta : (alerta.nivel || alerta.tipo || 'Activo');
-        const fenomeno = typeof alerta === 'object' && alerta.fenomeno ? ` · ${alerta.fenomeno}` : '';
-        const nivelNorm = textoNivel.toLowerCase();
+      alertasDiv.innerHTML = '';
 
-        let badgeStyle = 'background-color: rgba(148, 163, 184, 0.2); border: 1px solid rgba(148, 163, 184, 0.4);';
+      alertasActivas.forEach(alerta => {
+        const nivelNorm = normalizarTexto(alerta.nivel);
+        let badgeStyle = 'background-color: rgba(59, 130, 246, 0.16); border: 1px solid rgba(59, 130, 246, 0.45); color: var(--md-primary);';
+        let etiquetaNivel = alerta.nivel;
+
         if (nivelNorm.includes('amarill')) {
-          badgeStyle = 'background-color: rgba(234, 179, 8, 0.18); border: 1px solid rgba(234, 179, 8, 0.45); color: #ca8a04;';
+          badgeStyle = 'background-color: rgba(234, 179, 8, 0.18); border: 1px solid rgba(234, 179, 8, 0.5); color: #eab308;';
+          etiquetaNivel = 'Aviso Amarillo';
         } else if (nivelNorm.includes('naranj')) {
-          badgeStyle = 'background-color: rgba(249, 115, 22, 0.18); border: 1px solid rgba(249, 115, 22, 0.45); color: #ea580c;';
+          badgeStyle = 'background-color: rgba(249, 115, 22, 0.18); border: 1px solid rgba(249, 115, 22, 0.5); color: #f97316;';
+          etiquetaNivel = 'Aviso Naranja';
         } else if (nivelNorm.includes('roj')) {
-          badgeStyle = 'background-color: rgba(239, 68, 68, 0.18); border: 1px solid rgba(239, 68, 68, 0.45); color: #dc2626;';
+          badgeStyle = 'background-color: rgba(239, 68, 68, 0.18); border: 1px solid rgba(239, 68, 68, 0.5); color: #ef4444;';
+          etiquetaNivel = 'Aviso Rojo';
+        } else if (nivelNorm.includes('especial')) {
+          badgeStyle = 'background-color: rgba(168, 85, 247, 0.18); border: 1px solid rgba(168, 85, 247, 0.5); color: #c084fc;';
+          etiquetaNivel = 'Aviso Especial';
+        } else if (!etiquetaNivel.toLowerCase().startsWith('aviso')) {
+          etiquetaNivel = `Aviso ${etiquetaNivel}`;
         }
 
-        return `
-          <div style="${badgeStyle}" class="px-3 py-1 rounded-full flex items-center gap-1.5 text-xs font-semibold shadow-sm">
-            <span class="material-symbols-rounded text-[15px]">warning</span>
-            <span>Aviso ${textoNivel}${fenomeno}</span>
-          </div>
+        const textoFenomeno = alerta.fenomeno ? ` · ${alerta.fenomeno}` : '';
+        const badge = document.createElement('button');
+        badge.type = 'button';
+        badge.style.cssText = badgeStyle;
+        badge.className = 'px-3 py-1.5 rounded-full flex items-center gap-1.5 text-xs font-semibold shadow-sm transition active:scale-95';
+        badge.innerHTML = `
+          <span class="material-symbols-rounded text-[16px]">warning</span>
+          <span>${etiquetaNivel}${textoFenomeno}</span>
         `;
-      }).join('');
+
+        if (alerta.descripcion || alerta.fenomeno) {
+          badge.addEventListener('click', () => {
+            mostrarToast(alerta.descripcion || `${etiquetaNivel}: ${alerta.fenomeno}`, 'warning');
+          });
+        }
+
+        alertasDiv.appendChild(badge);
+      });
     } else {
       alertasDiv.classList.add('hidden');
       alertasDiv.classList.remove('flex');
@@ -390,7 +615,7 @@ function renderizarUI() {
     extraDiv.classList.remove('hidden');
     extraDiv.classList.add('flex');
 
-    const { uv, nieveRaw, tormenta, sensacion, racha, direccion } = extraerDatosAvanzadosActuales(data);
+    const { uv, nieveRaw, tormenta, sensacion, racha, direccion } = extraerDatosAvanzadosActuales(data, actualSincronizado);
     const tarjetasExtra = [];
 
     const crearChipExtra = (icono, etiqueta, valor) => `
@@ -439,8 +664,7 @@ function renderizarUI() {
     extraDiv.innerHTML = '';
   }
 
-  // Renderizado del carrusel según si hay un día seleccionado o las próximas 24h
-  const horasHoy24 = Array.isArray(data.hoy_horas) ? data.hoy_horas.slice(0, 24) : [];
+  // Renderizado del carrusel según si hay un día futuro seleccionado o las próximas 24h sincronizadas
   if (diaSeleccionadoIndex !== null && data.proximos_dias?.[diaSeleccionadoIndex]) {
     const diaSel = data.proximos_dias[diaSeleccionadoIndex];
     const horasDiaSel = obtenerHorasParaDia(data, diaSel, diaSeleccionadoIndex);
@@ -448,13 +672,12 @@ function renderizarUI() {
       renderizarCarrusel(horasDiaSel, `Horas: ${diaSel.dia_semana}`, true);
     } else {
       diaSeleccionadoIndex = null;
-      renderizarCarrusel(horasHoy24, "Próximas horas", false);
+      renderizarCarrusel(proximas24Horas, "Próximas horas", false);
     }
   } else {
-    renderizarCarrusel(horasHoy24, "Próximas horas", false);
+    renderizarCarrusel(proximas24Horas, "Próximas horas", false);
   }
 
-  // Renderizado de Próximos días
   renderizarListaDias(data);
 }
 
@@ -483,7 +706,6 @@ function renderizarListaDias(data) {
     if (hasHoras) {
       row.onclick = () => {
         if (diaSeleccionadoIndex === index) {
-          // Si ya estaba activo, volver a las próximas horas de hoy
           diaSeleccionadoIndex = null;
           renderizarUI();
         } else {
@@ -498,7 +720,10 @@ function renderizarListaDias(data) {
       };
     }
 
-    const probPrecipDia = primerValorDefinido(dia.prob_precipitacion, dia.precipitacion, 0);
+    // Separación estricta en la lista de días: solo probabilidad en %
+    const probPrecipDia = parsearProbabilidadPct(
+      primerValorDefinido(dia.prob_precipitacion, dia.probPrecipitacion, dia.prob_lluvia)
+    ) ?? 0;
 
     row.innerHTML = `
       <div class="flex flex-col w-28">
@@ -620,6 +845,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     });
   }
+
+  // Re-sincronizar automáticamente al volver a la pestaña/app si ha cambiado la hora
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && currentWeatherData) {
+      renderizarUI();
+    }
+  });
 
   /* --- BUSCADOR --- */
   const renderizarResultadosBusqueda = (queryRaw) => {
