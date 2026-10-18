@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Pablómetro</title>
   <meta name="description" content="El tiempo oficial de la AEMET, pero con buen gusto. Una aplicación meteorológica ultraligera y minimalista.">
   
@@ -18,7 +18,7 @@
   <meta property="og:type" content="website">
   <meta property="og:title" content="Pablómetro">
   <meta property="og:description" content="El tiempo oficial de la AEMET, pero con buen gusto. Una aplicación meteorológica ultraligera y minimalista.">
-  <meta property="og:image" content="favicon.png">
+  <meta property="og:image" content="banner-image.svg">
   
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,1,0" rel="stylesheet" />
@@ -72,12 +72,17 @@
     :root[data-color="purple"][data-theme="dark"] { --md-primary: #c084fc; }
     @media (prefers-color-scheme: dark) { :root[data-color="purple"]:not([data-theme="light"]) { --md-primary: #c084fc; } }
 
-    body { 
+    *, *::before, *::after {
+      touch-action: manipulation;
+    }
+
+    html, body { 
       background-color: var(--md-surface); 
       color: var(--text-main);
       font-family: 'Google Sans', 'Product Sans', 'Outfit', system-ui, sans-serif;
       touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;
+      -webkit-text-size-adjust: 100%;
       scroll-behavior: smooth;
     }
     .material-symbols-rounded { font-variation-settings: 'FILL' 1; }
@@ -168,7 +173,7 @@
 <body class="min-h-screen p-4 md:p-8 max-w-2xl mx-auto relative pb-28">
 
   <!-- Toast de notificaciones -->
-  <div id="toast-notification" class="fixed top-5 left-1/2 -translate-x-1/2 z-[70] bg-md-surface-container-high border border-border-color text-text-main px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 transition-all duration-300 opacity-0 -translate-y-4 pointer-events-none max-w-[90vw]">
+  <div id="toast-notification" class="fixed top-5 left-1/2 -translate-x-1/2 z-[80] bg-md-surface-container-high border border-border-color text-text-main px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 transition-all duration-300 opacity-0 -translate-y-4 pointer-events-none max-w-[90vw]">
     <span id="toast-icon" class="material-symbols-rounded text-md-primary shrink-0">info</span>
     <span id="toast-message" class="text-sm font-medium">Mensaje</span>
   </div>
@@ -223,7 +228,8 @@
       </button>
     </div>
 
-    <section id="ui-carrusel-horas" class="flex gap-3 overflow-x-auto no-scrollbar pb-2 mb-8 snap-x scroll-smooth">
+    <!-- Carrusel por horas con padding extra para no cortar nunca el contorno del primer elemento -->
+    <section id="ui-carrusel-horas" class="flex gap-3 overflow-x-auto no-scrollbar px-1 py-1 pb-2 mb-8 snap-x scroll-smooth">
     </section>
 
     <div class="flex items-center justify-between ml-2 mr-2 mb-3">
@@ -234,21 +240,66 @@
     </section>
   </main>
 
-  <!-- Barra de navegación inferior -->
-  <nav class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-md-surface/80 backdrop-blur-lg shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-border-color rounded-full p-1.5 flex items-center gap-1 z-40">
-    <button id="btn-tiempo" class="flex items-center gap-2 px-5 py-2.5 bg-md-surface-container-high rounded-full transition">
-      <span class="material-symbols-rounded text-[22px] text-md-primary" style="font-variation-settings: 'FILL' 1;">partly_cloudy_day</span>
-      <span class="text-sm font-semibold text-md-primary">Tiempo</span>
+  <!-- Barra de navegación inferior: solo muestra texto en la pestaña activa -->
+  <nav class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-md-surface/85 backdrop-blur-lg shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-border-color rounded-full p-1.5 flex items-center justify-between gap-1 z-40">
+    <button id="btn-tiempo" class="nav-btn flex items-center justify-center gap-2 px-5 py-2.5 bg-md-surface-container-high rounded-full transition-all duration-200 text-md-primary">
+      <span class="nav-icon material-symbols-rounded text-[22px]" style="font-variation-settings: 'FILL' 1;">partly_cloudy_day</span>
+      <span class="nav-label text-sm font-semibold">Tiempo</span>
     </button>
-    <button id="btn-search" class="flex items-center gap-2 px-5 py-2.5 hover:bg-md-surface-container/50 rounded-full transition text-text-muted hover:text-text-main">
-      <span class="material-symbols-rounded text-[22px]" style="font-variation-settings: 'FILL' 0;">search</span>
-      <span class="text-sm font-semibold">Buscar</span>
+    <button id="btn-search" class="nav-btn flex items-center justify-center gap-2 p-2.5 hover:bg-md-surface-container/50 rounded-full transition-all duration-200 text-text-muted hover:text-text-main" aria-label="Buscar">
+      <span class="nav-icon material-symbols-rounded text-[22px]" style="font-variation-settings: 'FILL' 0;">search</span>
+      <span class="nav-label text-sm font-semibold hidden">Buscar</span>
     </button>
-    <button id="btn-options" class="flex items-center gap-2 px-5 py-2.5 hover:bg-md-surface-container/50 rounded-full transition text-text-muted hover:text-text-main">
-      <span class="material-symbols-rounded text-[22px]" style="font-variation-settings: 'FILL' 0;">settings</span>
-      <span class="text-sm font-semibold">Opciones</span>
+    <button id="btn-options" class="nav-btn flex items-center justify-center gap-2 p-2.5 hover:bg-md-surface-container/50 rounded-full transition-all duration-200 text-text-muted hover:text-text-main" aria-label="Opciones">
+      <span class="nav-icon material-symbols-rounded text-[22px]" style="font-variation-settings: 'FILL' 0;">settings</span>
+      <span class="nav-label text-sm font-semibold hidden">Opciones</span>
     </button>
   </nav>
+
+  <!-- Modal grande superpuesto para Avisos Meteorológicos -->
+  <div id="alert-modal" class="fixed inset-0 z-[65] hidden items-center justify-center p-4 bg-black/60 backdrop-blur-sm opacity-0 transition-opacity duration-300">
+    <div id="alert-modal-panel" class="bg-md-surface border border-border-color rounded-3xl p-6 max-w-md w-full shadow-2xl flex flex-col gap-4 transform scale-95 transition-transform duration-300 max-h-[85vh] overflow-y-auto no-scrollbar">
+      <div class="flex justify-between items-start gap-3">
+        <div class="flex items-center gap-3">
+          <div id="alert-modal-icon-wrap" class="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0">
+            <span id="alert-modal-icon" class="material-symbols-rounded text-2xl">warning</span>
+          </div>
+          <div>
+            <span id="alert-modal-badge" class="inline-block text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full mb-1">Aviso</span>
+            <h4 id="alert-modal-title" class="text-xl font-bold text-text-main leading-tight">Fenómeno meteorológico</h4>
+          </div>
+        </div>
+        <button id="btn-close-alert-modal" class="p-2 -mr-1 -mt-1 rounded-full hover:bg-md-surface-container text-text-muted flex items-center justify-center transition">
+          <span class="material-symbols-rounded">close</span>
+        </button>
+      </div>
+
+      <div class="bg-md-surface-container rounded-2xl p-4 flex flex-col gap-3 border border-border-color/60">
+        <div class="flex items-center gap-2 text-xs font-semibold text-text-muted uppercase tracking-wider">
+          <span class="material-symbols-rounded text-[16px] text-md-primary">location_on</span>
+          <span id="alert-modal-municipio">Localidad</span>
+        </div>
+        <p id="alert-modal-desc" class="text-sm text-text-main leading-relaxed">
+          Descripción detallada del aviso meteorológico.
+        </p>
+      </div>
+
+      <div id="alert-modal-list-container" class="hidden flex-col gap-2">
+        <p class="text-xs font-semibold text-text-muted uppercase tracking-wider">Otros avisos activos en la zona</p>
+        <div id="alert-modal-other-list" class="flex flex-col gap-2"></div>
+      </div>
+
+      <div class="flex gap-2.5 mt-1">
+        <a href="https://www.aemet.es/es/eltiempo/prediccion/avisos" target="_blank" rel="noopener noreferrer" class="flex-1 py-3 bg-md-surface-container-high hover:bg-md-surface-container text-text-main font-semibold rounded-2xl flex items-center justify-center gap-1.5 text-sm transition">
+          <span class="material-symbols-rounded text-[18px] text-md-primary">open_in_new</span>
+          <span>Ver en AEMET</span>
+        </a>
+        <button id="btn-ok-alert-modal" class="flex-1 py-3 bg-md-primary text-white font-semibold rounded-2xl active:scale-[0.98] transition text-sm">
+          Entendido
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- Modal del buscador -->
   <div id="search-modal" class="fixed inset-0 bg-md-surface z-50 hidden flex-col transition-opacity">
@@ -263,7 +314,7 @@
       <span class="material-symbols-rounded" id="icono-gps">my_location</span>
       <span class="font-medium text-lg" id="texto-gps">Usar mi ubicación actual</span>
     </button>
-    <div id="search-results" class="flex-1 overflow-y-auto pb-24">
+    <div id="search-results" class="flex-1 overflow-y-auto pb-28">
     </div>
   </div>
 
@@ -271,7 +322,7 @@
   <div id="options-modal" class="fixed inset-0 z-50 hidden justify-center items-end">
     <div id="options-overlay" class="absolute inset-0 bg-black/50 opacity-0 transition-opacity duration-300"></div>
     
-    <div id="options-panel" class="relative bg-md-surface w-full max-w-2xl rounded-t-3xl p-6 pb-10 shadow-2xl transform translate-y-full transition-transform duration-300 flex flex-col gap-6 max-h-[90vh] overflow-y-auto no-scrollbar">
+    <div id="options-panel" class="relative bg-md-surface w-full max-w-2xl rounded-t-3xl p-6 pb-28 shadow-2xl transform translate-y-full transition-transform duration-300 flex flex-col gap-6 max-h-[90vh] overflow-y-auto no-scrollbar">
       <div class="w-12 h-1.5 bg-border-color rounded-full mx-auto mb-1 shrink-0"></div>
       
       <!-- Cabecera con botón de cierre -->
@@ -282,36 +333,36 @@
         </button>
       </div>
       
+      <!-- Sección unificada TEMA (Modo + Selector de colores centrado) -->
       <div>
         <p class="text-sm font-medium text-text-muted mb-3">TEMA</p>
-        <div class="flex gap-2 bg-md-surface-container p-1.5 rounded-2xl">
-          <button class="theme-btn flex-1 py-2 text-sm font-medium rounded-xl transition data-[active=true]:bg-md-surface data-[active=true]:text-md-primary data-[active=true]:shadow-sm" data-theme-val="system">Sistema</button>
-          <button class="theme-btn flex-1 py-2 text-sm font-medium rounded-xl transition data-[active=true]:bg-md-surface data-[active=true]:text-md-primary data-[active=true]:shadow-sm" data-theme-val="light">Claro</button>
-          <button class="theme-btn flex-1 py-2 text-sm font-medium rounded-xl transition data-[active=true]:bg-md-surface data-[active=true]:text-md-primary data-[active=true]:shadow-sm" data-theme-val="dark">Oscuro</button>
-        </div>
-      </div>
+        <div class="flex flex-col gap-4">
+          <div class="flex gap-2 bg-md-surface-container p-1.5 rounded-2xl">
+            <button class="theme-btn flex-1 py-2 text-sm font-medium rounded-xl transition data-[active=true]:bg-md-surface data-[active=true]:text-md-primary data-[active=true]:shadow-sm" data-theme-val="system">Sistema</button>
+            <button class="theme-btn flex-1 py-2 text-sm font-medium rounded-xl transition data-[active=true]:bg-md-surface data-[active=true]:text-md-primary data-[active=true]:shadow-sm" data-theme-val="light">Claro</button>
+            <button class="theme-btn flex-1 py-2 text-sm font-medium rounded-xl transition data-[active=true]:bg-md-surface data-[active=true]:text-md-primary data-[active=true]:shadow-sm" data-theme-val="dark">Oscuro</button>
+          </div>
 
-      <div>
-        <p class="text-sm font-medium text-text-muted mb-3">COLOR PRINCIPAL</p>
-        <div class="flex gap-4">
-          <button class="color-btn group w-12 h-12 rounded-full bg-[#1b6ef3] flex items-center justify-center transition border-2 border-transparent data-[active=true]:border-text-main" data-color-val="blue">
-            <span class="material-symbols-rounded text-white opacity-0 group-data-[active=true]:opacity-100 transition-opacity">check</span>
-          </button>
-          <button class="color-btn group w-12 h-12 rounded-full bg-[#386a20] flex items-center justify-center transition border-2 border-transparent data-[active=true]:border-text-main" data-color-val="green">
-            <span class="material-symbols-rounded text-white opacity-0 group-data-[active=true]:opacity-100 transition-opacity">check</span>
-          </button>
-          <button class="color-btn group w-12 h-12 rounded-full bg-[#ea580c] flex items-center justify-center transition border-2 border-transparent data-[active=true]:border-text-main" data-color-val="orange">
-            <span class="material-symbols-rounded text-white opacity-0 group-data-[active=true]:opacity-100 transition-opacity">check</span>
-          </button>
-          <button class="color-btn group w-12 h-12 rounded-full bg-[#9333ea] flex items-center justify-center transition border-2 border-transparent data-[active=true]:border-text-main" data-color-val="purple">
-            <span class="material-symbols-rounded text-white opacity-0 group-data-[active=true]:opacity-100 transition-opacity">check</span>
-          </button>
-          <div class="relative w-12 h-12">
-            <input type="color" id="custom-color-picker" class="opacity-0 absolute inset-0 w-full h-full cursor-pointer z-10" />
-            <button class="color-btn group w-full h-full rounded-full flex items-center justify-center transition border-2 border-transparent data-[active=true]:border-text-main overflow-hidden relative" data-color-val="custom">
-              <div id="custom-color-preview" class="absolute inset-0 bg-gradient-to-br from-pink-500 via-red-500 to-yellow-500"></div>
-              <span class="material-symbols-rounded text-white relative z-0 opacity-0 group-data-[active=true]:opacity-100 transition-opacity drop-shadow-md">check</span>
+          <div class="flex justify-center items-center gap-4 pt-1">
+            <button class="color-btn group w-12 h-12 rounded-full bg-[#1b6ef3] flex items-center justify-center transition border-2 border-transparent data-[active=true]:border-text-main" data-color-val="blue" aria-label="Azul">
+              <span class="material-symbols-rounded text-white opacity-0 group-data-[active=true]:opacity-100 transition-opacity">check</span>
             </button>
+            <button class="color-btn group w-12 h-12 rounded-full bg-[#386a20] flex items-center justify-center transition border-2 border-transparent data-[active=true]:border-text-main" data-color-val="green" aria-label="Verde">
+              <span class="material-symbols-rounded text-white opacity-0 group-data-[active=true]:opacity-100 transition-opacity">check</span>
+            </button>
+            <button class="color-btn group w-12 h-12 rounded-full bg-[#ea580c] flex items-center justify-center transition border-2 border-transparent data-[active=true]:border-text-main" data-color-val="orange" aria-label="Naranja">
+              <span class="material-symbols-rounded text-white opacity-0 group-data-[active=true]:opacity-100 transition-opacity">check</span>
+            </button>
+            <button class="color-btn group w-12 h-12 rounded-full bg-[#9333ea] flex items-center justify-center transition border-2 border-transparent data-[active=true]:border-text-main" data-color-val="purple" aria-label="Morado">
+              <span class="material-symbols-rounded text-white opacity-0 group-data-[active=true]:opacity-100 transition-opacity">check</span>
+            </button>
+            <div class="relative w-12 h-12">
+              <input type="color" id="custom-color-picker" class="opacity-0 absolute inset-0 w-full h-full cursor-pointer z-10" aria-label="Color personalizado" />
+              <button class="color-btn group w-full h-full rounded-full flex items-center justify-center transition border-2 border-transparent data-[active=true]:border-text-main overflow-hidden relative" data-color-val="custom">
+                <div id="custom-color-preview" class="absolute inset-0 bg-gradient-to-br from-pink-500 via-red-500 to-yellow-500"></div>
+                <span class="material-symbols-rounded text-white relative z-0 opacity-0 group-data-[active=true]:opacity-100 transition-opacity drop-shadow-md">check</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -387,12 +438,25 @@
         </div>
       </div>
 
+      <!-- Sección APLICACIÓN -->
       <div id="pwa-install-section">
         <p class="text-sm font-medium text-text-muted mb-3">APLICACIÓN</p>
         <button id="btn-install-pwa" class="w-full py-3.5 px-4 bg-md-surface-container-high hover:bg-md-surface-container transition rounded-2xl flex items-center justify-between text-text-main font-medium">
           <div class="flex items-center gap-3">
             <span class="material-symbols-rounded text-md-primary">install_mobile</span>
             <span>Instalar aplicación (PWA)</span>
+          </div>
+          <span class="material-symbols-rounded text-text-muted text-xl">chevron_right</span>
+        </button>
+      </div>
+
+      <!-- Nueva sección COMPARTIR debajo de APLICACIÓN -->
+      <div>
+        <p class="text-sm font-medium text-text-muted mb-3">COMPARTIR</p>
+        <button id="btn-share-app" class="w-full py-3.5 px-4 bg-md-surface-container-high hover:bg-md-surface-container transition rounded-2xl flex items-center justify-between text-text-main font-medium">
+          <div class="flex items-center gap-3">
+            <span class="material-symbols-rounded text-md-primary">share</span>
+            <span>Compartir Pablómetro</span>
           </div>
           <span class="material-symbols-rounded text-text-muted text-xl">chevron_right</span>
         </button>
