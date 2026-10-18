@@ -30,7 +30,7 @@ function renderizarUI(data) {
     const card = document.createElement('div');
     card.className = 'snap-start shrink-0 bg-md-surface-container rounded-2xl p-4 flex flex-col items-center w-20 shadow-sm';
     card.innerHTML = `
-      <span class="text-xs font-medium mb-2">${hora.hora}</span>
+      <span class="text-xs font-medium mb-2 text-text-muted">${hora.hora}</span>
       <span class="material-symbols-rounded text-3xl text-md-primary mb-2">${hora.icono}</span>
       <span class="text-lg font-medium text-text-main">${hora.temperatura}°</span>
     `;
@@ -71,15 +71,25 @@ function calcularDistancia(lat1, lon1, lat2, lon2) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  /* --- Elementos del DOM --- */
   const btnSearch = document.getElementById('btn-search');
   const searchModal = document.getElementById('search-modal');
   const btnCloseSearch = document.getElementById('btn-close-search');
   const searchInput = document.getElementById('search-input');
   const searchResults = document.getElementById('search-results');
+  
   const btnGps = document.getElementById('btn-gps');
   const iconoGps = document.getElementById('icono-gps');
   const textoGps = document.getElementById('texto-gps');
 
+  const btnOptions = document.getElementById('btn-options');
+  const optionsModal = document.getElementById('options-modal');
+  const optionsOverlay = document.getElementById('options-overlay');
+  const optionsPanel = document.getElementById('options-panel');
+  const themeBtns = document.querySelectorAll('.theme-btn');
+  const colorBtns = document.querySelectorAll('.color-btn');
+
+  /* --- LÓGICA DE BÚSQUEDA --- */
   if (btnSearch) {
     btnSearch.addEventListener('click', () => {
       searchModal.classList.remove('hidden');
@@ -104,21 +114,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         alert('Tu navegador no soporta geolocalización');
         return;
       }
-
       iconoGps.textContent = 'sync';
       iconoGps.classList.add('animate-spin');
       textoGps.textContent = 'Buscando tu zona...';
 
       navigator.geolocation.getCurrentPosition((position) => {
-        const userLat = position.coords.latitude;
-        const userLon = position.coords.longitude;
-
         let municipioMasCercano = null;
         let distanciaMinima = Infinity;
 
         municipiosDB.forEach(m => {
           if (m.lat && m.lon) {
-            const dist = calcularDistancia(userLat, userLon, m.lat, m.lon);
+            const dist = calcularDistancia(position.coords.latitude, position.coords.longitude, m.lat, m.lon);
             if (dist < distanciaMinima) {
               distanciaMinima = dist;
               municipioMasCercano = m;
@@ -130,12 +136,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         iconoGps.classList.remove('animate-spin');
         textoGps.textContent = 'Usar mi ubicación actual';
 
-        if (municipioMasCercano) {
-          seleccionarMunicipio(municipioMasCercano.id_ine);
-        }
+        if (municipioMasCercano) seleccionarMunicipio(municipioMasCercano.id_ine);
 
       }, (error) => {
-        console.error(error);
         alert('Activa el permiso de ubicación en tu navegador para usar esta función.');
         iconoGps.textContent = 'my_location';
         iconoGps.classList.remove('animate-spin');
@@ -147,26 +150,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (searchInput) {
     searchInput.addEventListener('input', (e) => {
       const query = e.target.value.toLowerCase().trim();
-      
-      if (query.length > 0) {
-        btnGps.classList.add('hidden');
-      } else {
+      if (query.length > 0) btnGps.classList.add('hidden');
+      else {
         btnGps.classList.remove('hidden');
         searchResults.innerHTML = '';
         return;
       }
 
-      if (query.length < 2) {
-        searchResults.innerHTML = '';
-        return;
-      }
+      if (query.length < 2) { searchResults.innerHTML = ''; return; }
       
       const isNumber = /^\d+$/.test(query);
-      
       const filtrados = municipiosDB.filter(m => {
-        if (isNumber) {
-          return m.cps && m.cps.some(cp => cp.startsWith(query));
-        }
+        if (isNumber) return m.cps && m.cps.some(cp => cp.startsWith(query));
         return m.nombre.toLowerCase().includes(query) || m.provincia.toLowerCase().includes(query);
       }).slice(0, 15); 
       
@@ -191,11 +186,74 @@ document.addEventListener('DOMContentLoaded', async () => {
     cargarTiempo(ine);
   };
 
+  /* --- LÓGICA DEL MENÚ DE OPCIONES --- */
+  const closeOptionsModal = () => {
+    optionsOverlay.classList.add('opacity-0');
+    optionsPanel.classList.add('translate-y-full');
+    setTimeout(() => {
+      optionsModal.classList.add('hidden');
+      optionsModal.classList.remove('flex');
+    }, 300);
+  };
+
+  if (btnOptions) {
+    btnOptions.addEventListener('click', () => {
+      optionsModal.classList.remove('hidden');
+      optionsModal.classList.add('flex');
+      // Forzar reflow para que la animación funcione
+      void optionsModal.offsetWidth;
+      optionsOverlay.classList.remove('opacity-0');
+      optionsPanel.classList.remove('translate-y-full');
+    });
+  }
+  
+  if (optionsOverlay) {
+    optionsOverlay.addEventListener('click', closeOptionsModal);
+  }
+
+  // Refrescar UI de botones según preferencias activas
+  const updateSettingsUI = () => {
+    const currentTheme = localStorage.getItem('app_theme') || 'system';
+    const currentColor = localStorage.getItem('app_color') || 'blue';
+
+    themeBtns.forEach(btn => {
+      btn.dataset.active = btn.dataset.themeVal === currentTheme ? 'true' : 'false';
+    });
+
+    colorBtns.forEach(btn => {
+      const isActive = btn.dataset.colorVal === currentColor;
+      btn.dataset.active = isActive ? 'true' : 'false';
+      btn.querySelector('span').classList.toggle('opacity-0', !isActive);
+    });
+  };
+
+  // Cambio de Tema
+  themeBtns.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const val = e.currentTarget.dataset.themeVal;
+      localStorage.setItem('app_theme', val);
+      document.documentElement.setAttribute('data-theme', val === 'system' ? '' : val);
+      updateSettingsUI();
+    });
+  });
+
+  // Cambio de Color
+  colorBtns.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const val = e.currentTarget.dataset.colorVal;
+      localStorage.setItem('app_color', val);
+      document.documentElement.setAttribute('data-color', val);
+      updateSettingsUI();
+    });
+  });
+
+  // Iniciar configuración de interfaz
+  updateSettingsUI();
+
+  /* --- INICIO DE DATOS --- */
   try {
     const res = await fetch('municipios.json');
-    if (res.ok) {
-      municipiosDB = await res.json();
-    }
+    if (res.ok) municipiosDB = await res.json();
   } catch (error) {
     console.error("No se pudo cargar la base de datos de municipios", error);
   }
