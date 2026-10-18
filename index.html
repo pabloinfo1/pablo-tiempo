@@ -4,9 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>El Tiempo</title>
-  <!-- Tailwind para utilidad MD3 -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Material Symbols de Google -->
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,1,0" rel="stylesheet" />
   
   <script>
@@ -30,14 +28,12 @@
   <style>
     body { background-color: theme('colors.md-surface'); font-family: system-ui, -apple-system, sans-serif; }
     .material-symbols-rounded { font-variation-settings: 'FILL' 1; }
-    /* Ocultar scrollbar en el carrusel horizontal */
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
   </style>
 </head>
 <body class="text-slate-900 min-h-screen p-4 md:p-8 max-w-2xl mx-auto relative">
 
-  <!-- Top App Bar simulada -->
   <header class="flex justify-between items-center mb-6 pt-2">
     <h1 id="ui-municipio" class="text-2xl font-medium tracking-tight">Cargando...</h1>
     <button id="btn-search" class="w-12 h-12 flex items-center justify-center rounded-full bg-md-surface-container hover:bg-md-surface-container-high transition">
@@ -45,7 +41,6 @@
     </button>
   </header>
 
-  <!-- Hero Card (Tiempo Actual) -->
   <section class="bg-md-surface-container-high rounded-md-card p-6 mb-6 flex flex-col items-center justify-center shadow-sm">
     <span id="ui-icono-actual" class="material-symbols-rounded text-6xl text-md-primary mb-2">cloud</span>
     <div class="flex items-start">
@@ -59,21 +54,16 @@
     </div>
   </section>
 
-  <!-- Carrusel Próximas Horas -->
   <h2 class="text-sm font-semibold ml-2 mb-3 text-slate-600 uppercase tracking-wider">Próximas horas</h2>
   <section id="ui-carrusel-horas" class="flex gap-3 overflow-x-auto no-scrollbar pb-2 mb-8 snap-x">
-    <!-- Las tarjetas por hora se inyectan por JS -->
   </section>
 
-  <!-- Lista Próximos Días -->
   <h2 class="text-sm font-semibold ml-2 mb-3 text-slate-600 uppercase tracking-wider">Próximos días</h2>
   <section id="ui-lista-dias" class="bg-md-surface-container rounded-md-card overflow-hidden mb-6">
-    <!-- La lista de días se inyecta por JS -->
   </section>
 
   <!-- Modal de Búsqueda MD3 -->
   <div id="search-modal" class="fixed inset-0 bg-md-surface z-50 hidden flex-col transition-opacity">
-    <!-- Barra superior de búsqueda -->
     <div class="p-4 flex gap-3 items-center border-b border-slate-200/60 bg-md-surface">
       <button id="btn-close-search" class="p-2 rounded-full hover:bg-md-surface-container transition flex items-center justify-center">
         <span class="material-symbols-rounded text-slate-600">arrow_back</span>
@@ -81,9 +71,14 @@
       <input type="text" id="search-input" placeholder="Buscar ciudad o código postal..." 
              class="flex-1 bg-transparent text-lg outline-none placeholder:text-slate-400 text-slate-900" autocomplete="off">
     </div>
-    <!-- Contenedor de resultados -->
+    
+    <!-- Botón GPS -->
+    <button id="btn-gps" class="w-full p-4 flex items-center gap-3 border-b border-slate-200/60 hover:bg-md-surface-container active:bg-md-surface-container transition text-left text-md-primary">
+      <span class="material-symbols-rounded" id="icono-gps">my_location</span>
+      <span class="font-medium text-lg" id="texto-gps">Usar mi ubicación actual</span>
+    </button>
+
     <div id="search-results" class="flex-1 overflow-y-auto">
-      <!-- Los resultados se inyectan por JS -->
     </div>
   </div>
 
