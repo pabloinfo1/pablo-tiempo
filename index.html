@@ -9,26 +9,26 @@
   
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,1,0" rel="stylesheet" />
-  
+  <!-- Importamos Outfit como clon perfecto de Google Sans por si el sistema no la trae instalada -->
   <style>
-    /* VARIABLES BASE (Azul - #1b6ef3) */
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap');
+    
     :root {
       --md-surface: #f8fafc;
       --md-surface-container: #f1f5f9;
       --md-surface-container-high: #e2e8f0;
-      --md-primary: #1b6ef3;
+      --md-primary: #1b6ef3; /* Predeterminado azul */
       --text-main: #0f172a;
       --text-muted: #475569;
       --border-color: rgba(226, 232, 240, 0.8);
     }
 
-    /* MODO OSCURO (Sistema y Forzado) */
     @media (prefers-color-scheme: dark) {
       :root:not([data-theme="light"]) {
         --md-surface: #0f172a;
         --md-surface-container: #1e293b;
         --md-surface-container-high: #334155;
-        --md-primary: #6bb6ff; /* Azul más claro para contraste */
+        --md-primary: #6bb6ff; 
         --text-main: #f8fafc;
         --text-muted: #94a3b8;
         --border-color: rgba(51, 65, 85, 0.8);
@@ -44,38 +44,28 @@
       --border-color: rgba(51, 65, 85, 0.8);
     }
 
-    /* TEMA VERDE (Anterior) */
-    :root[data-color="green"] {
-      --md-surface: #fbfdf8;
-      --md-surface-container: #f0f3eb;
-      --md-surface-container-high: #e9ece3;
-      --md-primary: #386a20;
-    }
-    @media (prefers-color-scheme: dark) {
-      :root[data-color="green"]:not([data-theme="light"]) {
-        --md-surface: #11140e;
-        --md-surface-container: #1e201b;
-        --md-surface-container-high: #282b25;
-        --md-primary: #9cd67d;
-      }
-    }
-    :root[data-color="green"][data-theme="dark"] {
-      --md-surface: #11140e;
-      --md-surface-container: #1e201b;
-      --md-surface-container-high: #282b25;
-      --md-primary: #9cd67d;
-    }
+    /* Colores predefinidos estáticos */
+    :root[data-color="blue"] { --md-primary: #1b6ef3; }
+    :root[data-color="blue"][data-theme="dark"] { --md-primary: #6bb6ff; }
+    @media (prefers-color-scheme: dark) { :root[data-color="blue"]:not([data-theme="light"]) { --md-primary: #6bb6ff; } }
+    
+    :root[data-color="green"] { --md-primary: #386a20; }
+    :root[data-color="green"][data-theme="dark"] { --md-primary: #9cd67d; }
+    @media (prefers-color-scheme: dark) { :root[data-color="green"]:not([data-theme="light"]) { --md-primary: #9cd67d; } }
 
-    /* TEMA NARANJA Y MORADO (Opcionales para el menú) */
     :root[data-color="orange"] { --md-primary: #ea580c; }
     :root[data-color="orange"][data-theme="dark"] { --md-primary: #fb923c; }
+    @media (prefers-color-scheme: dark) { :root[data-color="orange"]:not([data-theme="light"]) { --md-primary: #fb923c; } }
+
     :root[data-color="purple"] { --md-primary: #9333ea; }
     :root[data-color="purple"][data-theme="dark"] { --md-primary: #c084fc; }
+    @media (prefers-color-scheme: dark) { :root[data-color="purple"]:not([data-theme="light"]) { --md-primary: #c084fc; } }
 
     body { 
       background-color: var(--md-surface); 
       color: var(--text-main);
-      font-family: system-ui, -apple-system, sans-serif; 
+      /* Google Sans nativa para Pixel/Android, fallback a Outfit */
+      font-family: 'Google Sans', 'Product Sans', 'Outfit', system-ui, sans-serif; 
     }
     .material-symbols-rounded { font-variation-settings: 'FILL' 1; }
     .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -83,11 +73,18 @@
   </style>
 
   <script>
-    // Inicialización súper rápida para evitar parpadeos de color
+    // Inicialización de Tema y Color sin parpadeos
     const savedTheme = localStorage.getItem('app_theme') || 'system';
     const savedColor = localStorage.getItem('app_color') || 'blue';
+    
     if (savedTheme !== 'system') document.documentElement.setAttribute('data-theme', savedTheme);
-    document.documentElement.setAttribute('data-color', savedColor);
+    
+    if (savedColor.startsWith('#')) {
+      document.documentElement.setAttribute('data-color', 'custom');
+      document.documentElement.style.setProperty('--md-primary', savedColor);
+    } else {
+      document.documentElement.setAttribute('data-color', savedColor);
+    }
 
     tailwind.config = {
       theme: {
@@ -112,13 +109,12 @@
 <body class="min-h-screen p-4 md:p-8 max-w-2xl mx-auto relative pb-28">
 
   <header class="relative flex justify-center items-center mb-6 pt-2 h-12">
-    <!-- Logotipo e Icono Favicon -->
-    <div class="absolute left-0 flex items-center gap-2 text-md-primary">
+    <!-- Solo Favicon a la izquierda -->
+    <div class="absolute left-0 flex items-center text-md-primary">
       <img src="favicon.png" alt="Logo" class="w-8 h-8 rounded-lg object-contain">
-      <span class="font-bold text-xl tracking-tight hidden sm:block">Pablómetro</span>
     </div>
     
-    <h1 id="ui-municipio" class="text-2xl font-medium tracking-tight truncate max-w-[170px] sm:max-w-xs text-center">
+    <h1 id="ui-municipio" class="text-2xl font-medium tracking-tight truncate max-w-[200px] sm:max-w-xs text-center">
       Cargando...
     </h1>
   </header>
@@ -216,14 +212,38 @@
           <button class="color-btn w-12 h-12 rounded-full bg-[#9333ea] flex items-center justify-center transition border-2 border-transparent data-[active=true]:border-text-main" data-color-val="purple">
             <span class="material-symbols-rounded text-white opacity-0 data-[active=true]:opacity-100 transition-opacity">check</span>
           </button>
+          <!-- Selector Libre (Custom) -->
+          <div class="relative w-12 h-12">
+            <input type="color" id="custom-color-picker" class="opacity-0 absolute inset-0 w-full h-full cursor-pointer z-10" />
+            <button class="color-btn w-full h-full rounded-full flex items-center justify-center transition border-2 border-transparent data-[active=true]:border-text-main overflow-hidden relative" data-color-val="custom">
+              <div id="custom-color-preview" class="absolute inset-0 bg-gradient-to-br from-pink-500 via-red-500 to-yellow-500"></div>
+              <span class="material-symbols-rounded text-white relative z-0 opacity-0 data-[active=true]:opacity-100 transition-opacity drop-shadow-md">check</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      <!-- Botón Contactar -->
-      <a href="mailto:pabloinfo1@gmail.com" class="w-full py-4 mt-2 bg-md-surface-container-high hover:bg-md-surface-container transition rounded-2xl flex items-center justify-center gap-3 text-text-main font-medium">
-        <span class="material-symbols-rounded text-md-primary">mail</span>
-        Contactar a pabloinfo1@gmail.com
-      </a>
+      <!-- Botones Inferiores -->
+      <div class="mt-2 flex flex-col gap-3">
+        <!-- 50% Contacto / 50% Instagram -->
+        <div class="flex gap-3">
+          <a href="mailto:pabloinfo1@gmail.com" class="flex-1 py-3 bg-md-surface-container-high hover:bg-md-surface-container transition rounded-2xl flex items-center justify-center gap-2 text-text-main font-medium">
+            <span class="material-symbols-rounded text-md-primary">mail</span>
+            Contactar
+          </a>
+          <a href="https://www.instagram.com/pabloinfo1/" target="_blank" rel="noopener noreferrer" class="flex-1 py-3 bg-md-surface-container-high hover:bg-md-surface-container transition rounded-2xl flex items-center justify-center gap-2 text-text-main font-medium">
+            <span class="material-symbols-rounded text-md-primary">photo_camera</span>
+            Instagram
+          </a>
+        </div>
+        
+        <!-- Privacidad y Cookies -->
+        <button id="btn-privacy" class="w-full py-3 bg-md-surface-container-high hover:bg-md-surface-container transition rounded-2xl flex items-center justify-center gap-2 text-text-main font-medium">
+          <span class="material-symbols-rounded text-md-primary">cookie</span>
+          Privacidad y cookies
+        </button>
+      </div>
+
     </div>
   </div>
 
