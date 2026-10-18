@@ -61,82 +61,94 @@ function renderizarUI(data) {
   });
 }
 
-/* ==========================================
-   LÓGICA DE BÚSQUEDA Y MODAL
-========================================== */
-
-const btnSearch = document.getElementById('btn-search');
-const searchModal = document.getElementById('search-modal');
-const btnCloseSearch = document.getElementById('btn-close-search');
-const searchInput = document.getElementById('search-input');
-const searchResults = document.getElementById('search-results');
-
-// Abrir modal
-btnSearch.addEventListener('click', () => {
-  searchModal.classList.remove('hidden');
-  searchModal.classList.add('flex');
-  searchInput.focus();
-});
-
-// Cerrar modal
-btnCloseSearch.addEventListener('click', () => {
-  searchModal.classList.add('hidden');
-  searchModal.classList.remove('flex');
-  searchInput.value = '';
-  searchResults.innerHTML = '';
-});
-
-// Filtrado en tiempo real
-searchInput.addEventListener('input', (e) => {
-  const query = e.target.value.toLowerCase().trim();
-  
-  if (query.length < 2) {
-    searchResults.innerHTML = '';
-    return;
-  }
-  
-  // Detectar si el usuario está escribiendo un Código Postal (solo números)
-  const isNumber = /^\d+$/.test(query);
-  
-  // Buscar coincidencias y limitar a los 15 primeros resultados para no saturar
-  const filtrados = municipiosDB.filter(m => {
-    if (isNumber) {
-      return m.cps && m.cps.some(cp => cp.startsWith(query));
-    }
-    return m.nombre.toLowerCase().includes(query) || m.provincia.toLowerCase().includes(query);
-  }).slice(0, 15); 
-  
-  // Renderizar la lista
-  searchResults.innerHTML = filtrados.map(m => `
-    <div class="p-4 flex flex-col border-b border-slate-100 active:bg-md-surface-container cursor-pointer transition" 
-         onclick="seleccionarMunicipio('${m.id_ine}')">
-      <span class="font-medium text-lg text-slate-800">${m.nombre}</span>
-      <span class="text-sm text-slate-500">${m.provincia}</span>
-    </div>
-  `).join('');
-});
-
-// Acción al hacer clic en un municipio de la lista
-window.seleccionarMunicipio = (ine) => {
-  searchModal.classList.add('hidden');
-  searchModal.classList.remove('flex');
-  searchInput.value = '';
-  searchResults.innerHTML = '';
-  
-  document.getElementById('ui-municipio').textContent = "Cargando...";
-  cargarTiempo(ine);
-};
-
-// Inicialización: Cargar la BD de municipios y leer la ciudad guardada
+// Inicializamos todo cuando el DOM esté completamente listo
 document.addEventListener('DOMContentLoaded', async () => {
+  
+  const btnSearch = document.getElementById('btn-search');
+  const searchModal = document.getElementById('search-modal');
+  const btnCloseSearch = document.getElementById('btn-close-search');
+  const searchInput = document.getElementById('search-input');
+  const searchResults = document.getElementById('search-results');
+
+  // Evento para abrir el modal
+  if (btnSearch) {
+    btnSearch.addEventListener('click', () => {
+      searchModal.classList.remove('hidden');
+      searchModal.classList.add('flex');
+      searchInput.focus();
+    });
+  }
+
+  // Evento para cerrar el modal
+  if (btnCloseSearch) {
+    btnCloseSearch.addEventListener('click', () => {
+      searchModal.classList.add('hidden');
+      searchModal.classList.remove('flex');
+      searchInput.value = '';
+      searchResults.innerHTML = '';
+    });
+  }
+
+  // Evento de escritura para el buscador
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      const query = e.target.value.toLowerCase().trim();
+      
+      if (query.length < 2) {
+        searchResults.innerHTML = '';
+        return;
+      }
+      
+      // Detectar si es un código postal (solo números)
+      const isNumber = /^\d+$/.test(query);
+      
+      const filtrados = municipiosDB.filter(m => {
+        if (isNumber) {
+          return m.cps && m.cps.some(cp => cp.startsWith(query));
+        }
+        return m.nombre.toLowerCase().includes(query) || m.provincia.toLowerCase().includes(query);
+      }).slice(0, 15); 
+      
+      searchResults.innerHTML = filtrados.map(m => `
+        <div class="p-4 flex flex-col border-b border-slate-100 active:bg-md-surface-container cursor-pointer transition" 
+             onclick="seleccionarMunicipio('${m.id_ine}')">
+          <span class="font-medium text-lg text-slate-800">${m.nombre}</span>
+          <span class="text-sm text-slate-500">${m.provincia}</span>
+        </div>
+      `).join('');
+    });
+  }
+
+  // Función global asignada al objeto window para el evento onclick
+  window.seleccionarMunicipio = (ine) => {
+    searchModal.classList.add('hidden');
+    searchModal.classList.remove('flex');
+    searchInput.value = '';
+    searchResults.innerHTML = '';
+    
+    document.getElementById('ui-municipio').textContent = "Cargando...";
+    cargarTiempo(ine);
+  };
+
+  // Carga del JSON de municipios. Si falla, carga un array de emergencia para probar.
   try {
     const res = await fetch('municipios.json');
-    municipiosDB = await res.json();
+    if (res.ok) {
+      municipiosDB = await res.json();
+    } else {
+      console.warn('No se encontró municipios.json. Cargando base de datos temporal.');
+      municipiosDB = [
+        { "id_ine": "07054", "nombre": "Santa Eulària des Riu", "provincia": "Illes Balears", "cps": ["07840", "07849", "07819"] },
+        { "id_ine": "28079", "nombre": "Madrid", "provincia": "Madrid", "cps": ["28001", "28002", "28013"] },
+        { "id_ine": "08019", "nombre": "Barcelona", "provincia": "Barcelona", "cps": ["08001", "08002"] },
+        { "id_ine": "48020", "nombre": "Bilbao", "provincia": "Bizkaia", "cps": ["48001", "48002"] }
+      ];
+    }
   } catch (error) {
-    console.error("No se pudo cargar la base de datos de municipios");
+    console.error("No se pudo cargar la base de datos de municipios", error);
   }
   
-  // Recuperar INE guardado o cargar uno por defecto (ej. 28079 para Madrid)
-  const savedIne = localStorage.getItem('saved_ine') || '28079';
+  // Recuperar INE guardado de visitas anteriores, o cargar 07054 (Santa Eulària) por defecto
+  const savedIne = localStorage.getItem('saved_ine') || '07054';
   cargarTiempo(savedIne);
 });
