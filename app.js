@@ -7,9 +7,7 @@ async function cargarTiempo(ine) {
     if (!res.ok) throw new Error('Error en la red');
     const data = await res.json();
     
-    // Guardamos la ciudad consultada para la próxima visita
     localStorage.setItem('saved_ine', ine);
-    
     renderizarUI(data);
   } catch (error) {
     console.error("Fallo al cargar el tiempo:", error);
@@ -61,16 +59,28 @@ function renderizarUI(data) {
   });
 }
 
-// Inicializamos todo cuando el DOM esté completamente listo
+// Algoritmo de Haversine para distancia entre dos coordenadas
+function calcularDistancia(lat1, lon1, lat2, lon2) {
+  const R = 6371; 
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
-  
   const btnSearch = document.getElementById('btn-search');
   const searchModal = document.getElementById('search-modal');
   const btnCloseSearch = document.getElementById('btn-close-search');
   const searchInput = document.getElementById('search-input');
   const searchResults = document.getElementById('search-results');
+  const btnGps = document.getElementById('btn-gps');
+  const iconoGps = document.getElementById('icono-gps');
+  const textoGps = document.getElementById('texto-gps');
 
-  // Evento para abrir el modal
   if (btnSearch) {
     btnSearch.addEventListener('click', () => {
       searchModal.classList.remove('hidden');
@@ -79,27 +89,84 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // Evento para cerrar el modal
   if (btnCloseSearch) {
     btnCloseSearch.addEventListener('click', () => {
       searchModal.classList.add('hidden');
       searchModal.classList.remove('flex');
       searchInput.value = '';
       searchResults.innerHTML = '';
+      btnGps.classList.remove('hidden');
     });
   }
 
-  // Evento de escritura para el buscador
+  // Lógica del botón GPS
+  if (btnGps) {
+    btnGps.addEventListener('click', () => {
+      if (!navigator.geolocation) {
+        alert('Tu navegador no soporta geolocalización');
+        return;
+      }
+
+      // Estado de carga
+      iconoGps.textContent = 'sync';
+      iconoGps.classList.add('animate-spin');
+      textoGps.textContent = 'Buscando tu zona...';
+
+      navigator.geolocation.getCurrentPosition((position) => {
+        const userLat = position.coords.latitude;
+        const userLon = position.coords.longitude;
+
+        let municipioMasCercano = null;
+        let distanciaMinima = Infinity;
+
+        // Buscar el municipio más cercano iterando el array en memoria
+        municipiosDB.forEach(m => {
+          if (m.lat && m.lon) {
+            const dist = calcularDistancia(userLat, userLon, m.lat, m.lon);
+            if (dist < distanciaMinima) {
+              distanciaMinima = dist;
+              municipioMasCercano = m;
+            }
+          }
+        });
+
+        // Restaurar estado del botón
+        iconoGps.textContent = 'my_location';
+        iconoGps.classList.remove('animate-spin');
+        textoGps.textContent = 'Usar mi ubicación actual';
+
+        if (municipioMasCercano) {
+          seleccionarMunicipio(municipioMasCercano.id_ine);
+        }
+
+      }, (error) => {
+        console.error(error);
+        alert('Activa el permiso de ubicación en tu navegador para usar esta función.');
+        iconoGps.textContent = 'my_location';
+        iconoGps.classList.remove('animate-spin');
+        textoGps.textContent = 'Usar mi ubicación actual';
+      });
+    });
+  }
+
   if (searchInput) {
     searchInput.addEventListener('input', (e) => {
       const query = e.target.value.toLowerCase().trim();
       
+      // Ocultar botón GPS si el usuario está escribiendo
+      if (query.length > 0) {
+        btnGps.classList.add('hidden');
+      } else {
+        btnGps.classList.remove('hidden');
+        searchResults.innerHTML = '';
+        return;
+      }
+
       if (query.length < 2) {
         searchResults.innerHTML = '';
         return;
       }
       
-      // Detectar si es un código postal (solo números)
       const isNumber = /^\d+$/.test(query);
       
       const filtrados = municipiosDB.filter(m => {
@@ -119,36 +186,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // Función global asignada al objeto window para el evento onclick
   window.seleccionarMunicipio = (ine) => {
     searchModal.classList.add('hidden');
     searchModal.classList.remove('flex');
     searchInput.value = '';
     searchResults.innerHTML = '';
+    btnGps.classList.remove('hidden');
     
     document.getElementById('ui-municipio').textContent = "Cargando...";
     cargarTiempo(ine);
   };
 
-  // Carga del JSON de municipios. Si falla, carga un array de emergencia para probar.
   try {
     const res = await fetch('municipios.json');
     if (res.ok) {
       municipiosDB = await res.json();
-    } else {
-      console.warn('No se encontró municipios.json. Cargando base de datos temporal.');
-      municipiosDB = [
-        { "id_ine": "07054", "nombre": "Santa Eulària des Riu", "provincia": "Illes Balears", "cps": ["07840", "07849", "07819"] },
-        { "id_ine": "28079", "nombre": "Madrid", "provincia": "Madrid", "cps": ["28001", "28002", "28013"] },
-        { "id_ine": "08019", "nombre": "Barcelona", "provincia": "Barcelona", "cps": ["08001", "08002"] },
-        { "id_ine": "48020", "nombre": "Bilbao", "provincia": "Bizkaia", "cps": ["48001", "48002"] }
-      ];
     }
   } catch (error) {
     console.error("No se pudo cargar la base de datos de municipios", error);
   }
   
-  // Recuperar INE guardado de visitas anteriores, o cargar 07054 (Santa Eulària) por defecto
   const savedIne = localStorage.getItem('saved_ine') || '07054';
   cargarTiempo(savedIne);
 });
