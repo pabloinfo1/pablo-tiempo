@@ -40,7 +40,7 @@
   
   <!-- Fuentes optimizadas (sin @import bloqueante y con subset de iconos exactos) -->
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0..1,0&icon_names=ac_unit,add_box,air,app_shortcut,arrow_back,check,check_circle,chevron_right,clear_day,clear_night,close,cloud,cloud_off,content_copy,cookie,desktop_windows,error,expand_more,foggy,hourglass_empty,info,install_mobile,ios_share,local_bar,location_disabled,location_off,location_on,mail,my_location,open_in_new,partly_cloudy_day,partly_cloudy_night,phone_iphone,photo_camera,public,rainy,schedule,search,settings,share,sync,thermostat,thunderstorm,tune,two_wheeler,warning,water_drop,wb_sunny,weather_snowy,wifi_off&display=block" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0..1,0&icon_names=ac_unit,add_box,air,app_shortcut,arrow_back,check,check_circle,chevron_right,clear_day,clear_night,close,cloud,cloud_off,content_copy,cookie,desktop_windows,error,expand_more,foggy,hourglass_empty,info,install_mobile,ios_share,local_bar,location_disabled,location_off,location_on,mail,my_location,open_in_new,partly_cloudy_day,partly_cloudy_night,phone_iphone,photo_camera,public,rainy,schedule,search,settings,share,sync,thermostat,thunderstorm,tune,two_wheeler,warning,water_drop,wb_sunny,weather_snowy&display=block" rel="stylesheet" />
 
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -205,12 +205,6 @@
 </head>
 <body class="min-h-screen p-4 md:p-8 max-w-2xl mx-auto relative pb-28">
 
-  <!-- Banner de Estado de Red (Offline) -->
-  <div id="offline-banner" class="hidden fixed top-4 left-1/2 -translate-x-1/2 z-[200] bg-red-500/90 backdrop-blur-md text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-lg items-center gap-1.5 transition-all duration-300">
-    <span class="material-symbols-rounded text-[16px]">wifi_off</span>
-    Sin conexión (Mostrando caché)
-  </div>
-
   <!-- Toast de notificaciones -->
   <div id="toast-notification" class="fixed top-5 left-1/2 -translate-x-1/2 z-[80] bg-md-surface-container-high border border-border-color text-text-main px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 transition-all duration-300 opacity-0 -translate-y-4 pointer-events-none max-w-[90vw]">
     <span id="toast-icon" class="material-symbols-rounded text-md-primary shrink-0">info</span>
@@ -227,10 +221,9 @@
     </h1>
   </header>
 
-  <!-- Contenedor Principal (Cambia de opacidad si se pierde red) -->
-  <main id="weather-content" class="transition-all duration-500">
+  <main id="weather-content" class="transition-opacity duration-300">
     <!-- Tarjeta principal del tiempo actual -->
-    <section class="bg-md-surface-container-high rounded-md-card p-6 mb-6 flex flex-col items-center justify-center shadow-sm w-full relative">
+    <section class="bg-md-surface-container-high rounded-md-card p-6 mb-6 flex flex-col items-center justify-center shadow-sm w-full transition-all relative">
       <span id="ui-icono-actual" class="material-symbols-rounded text-6xl text-md-primary mb-2">cloud</span>
       <div class="flex items-start">
         <span id="ui-temp-actual" class="text-6xl font-normal tracking-tighter">--</span>
@@ -473,7 +466,7 @@
         </div>
       </div>
 
-      <!-- Desplegable Mostrar Previsión Completa y Modos Lifestyle -->
+      <!-- Desplegable y Modos -->
       <div>
         <p class="text-sm font-medium text-text-muted mb-3">INFORMACIÓN METEOROLÓGICA</p>
         <div class="bg-md-surface-container-high rounded-2xl overflow-hidden transition-all duration-300">
@@ -543,7 +536,6 @@
           </div>
         </div>
 
-        <!-- Botones de Modo Estilo de Vida integrados -->
         <div class="flex gap-3 mt-3">
           <button id="btn-mode-moto" class="flex-1 py-3.5 bg-md-surface-container-high hover:bg-md-surface-container transition rounded-2xl flex flex-col items-center justify-center gap-1.5 text-text-main font-medium border-2 border-transparent data-[active=true]:border-md-primary data-[active=true]:bg-md-primary/10 data-[active=true]:text-md-primary shadow-sm">
             <span class="material-symbols-rounded text-[26px]">two_wheeler</span>
