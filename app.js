@@ -1,8 +1,10 @@
 const WORKER_URL = 'https://aemet-proxy.pabloinfo1.workers.dev/';
+const MAX_DATA_AGE_MS = 30 * 60 * 1000; // 30 minutos
 let municipiosDB = [];
 let municipiosCargando = true;
 let deferredInstallPrompt = null;
 let currentWeatherData = null;
+let lastFetchTimestamp = 0;
 let diaSeleccionadoIndex = null; // null = Próximas 24h desde hora actual, >0 = Día futuro seleccionado
 
 const DEFAULT_ADV_PREFS = {
@@ -17,8 +19,6 @@ const DEFAULT_ADV_PREFS = {
 function trackEvent(eventName, eventParams = {}) {
   if (typeof window.gtag === 'function') {
     window.gtag('event', eventName, eventParams);
-  } else {
-    console.warn('Analytics no está cargado. Evento:', eventName, eventParams);
   }
 }
 
@@ -28,15 +28,25 @@ function cargarPreferenciasAvanzadas() {
     if (guardadas && typeof guardadas === 'object') {
       return { ...DEFAULT_ADV_PREFS, ...guardadas };
     }
-  } catch (e) {
-    console.warn('Preferencias avanzadas reiniciadas al valor por defecto.');
+  } catch {
+    // Ignorar error de parseo y usar valores por defecto
   }
   return { ...DEFAULT_ADV_PREFS };
 }
 
 let advPrefs = cargarPreferenciasAvanzadas();
 
-/* --- UTILIDADES Y REPARACIÓN DE CODIFICACIÓN (MOJIBAKE iOS/AEMET) --- */
+/* --- UTILIDADES, ESCAPADO XSS Y REPARACIÓN DE CODIFICACIÓN --- */
+function escaparHTML(str) {
+  if (str === undefined || str === null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function repararTextoMojibake(str) {
   if (typeof str !== 'string') return str;
   if (!/[ÃÂâ]/.test(str)) return str;
@@ -47,32 +57,18 @@ function repararTextoMojibake(str) {
       if (code > 255) return str;
       bytes[i] = code;
     }
-    const decodificado = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-    return decodificado;
-  } catch (e) {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
     return str;
   }
-}
-
-function sanitizarObjetoTexto(obj) {
-  if (typeof obj === 'string') return repararTextoMojibake(obj);
-  if (Array.isArray(obj)) return obj.map(sanitizarObjetoTexto);
-  if (obj && typeof obj === 'object') {
-    const limpio = {};
-    for (const [k, v] of Object.entries(obj)) {
-      limpio[k] = sanitizarObjetoTexto(v);
-    }
-    return limpio;
-  }
-  return obj;
 }
 
 function obtenerNombreMunicipioLimpio(data) {
   const ineActual = String(data?.municipio?.id_ine || localStorage.getItem('saved_ine') || '').padStart(5, '0');
   if (municipiosDB.length > 0 && ineActual) {
-    const encontrado = municipiosDB.find(m => String(m.id_ine).padStart(5, '0') === ineActual);
+    const encontrado = municipiosDB.find(m => m.id_ine === ineActual);
     if (encontrado && encontrado.nombre) {
-      return repararTextoMojibake(encontrado.nombre);
+      return encontrado.nombre;
     }
   }
   return repararTextoMojibake(data?.municipio?.nombre || 'Localidad');
@@ -81,8 +77,8 @@ function obtenerNombreMunicipioLimpio(data) {
 function normalizarTexto(str) {
   if (!str) return '';
   return repararTextoMojibake(String(str))
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .trim();
 }
@@ -96,6 +92,7 @@ function primerValorDefinido(...valores) {
 
 function parsearPrecipitacionMm(valorRaw) {
   if (valorRaw === undefined || valorRaw === null || valorRaw === '') return 0;
+  if (typeof valorRaw === 'number') return valorRaw > 0 ? valorRaw : 0;
   const str = String(valorRaw).trim().toLowerCase();
   if (str === 'ip') return 0.1;
   const num = parseFloat(str.replace(',', '.'));
@@ -104,16 +101,14 @@ function parsearPrecipitacionMm(valorRaw) {
 
 function parsearProbabilidadPct(valorRaw) {
   if (valorRaw === undefined || valorRaw === null || valorRaw === '') return null;
-  const num = parseInt(String(valorRaw).trim(), 10);
+  const num = typeof valorRaw === 'number' ? valorRaw : parseInt(String(valorRaw).trim(), 10);
   if (isNaN(num)) return null;
   return Math.max(0, Math.min(100, num));
 }
 
 function extraerNumeroHora(horaStr) {
   if (horaStr === undefined || horaStr === null) return null;
-  const limpia = String(horaStr).trim();
-  const partes = limpia.split(':');
-  const num = parseInt(partes[0], 10);
+  const num = parseInt(String(horaStr).trim().split(':')[0], 10);
   return isNaN(num) ? null : num;
 }
 
@@ -213,37 +208,31 @@ function actualizarBarraNavegacion(seccionActiva = 'tiempo') {
 
 /* --- CONFIGURACIÓN PWA --- */
 function inicializarPWA() {
+  const baseUrl = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, '/');
+  const iconUrl = new URL('favicon.png', baseUrl).href;
+
   const manifest = {
-    name: "Pablómetro - El Tiempo",
-    short_name: "Pablómetro",
-    start_url: window.location.pathname,
-    display: "standalone",
-    background_color: "#0f172a",
-    theme_color: "#1b6ef3",
+    name: 'Pablómetro - El Tiempo',
+    short_name: 'Pablómetro',
+    start_url: baseUrl,
+    scope: baseUrl,
+    display: 'standalone',
+    background_color: '#0f172a',
+    theme_color: '#1b6ef3',
     icons: [
       {
-        src: new URL('favicon.png', window.location.href).href,
-        sizes: "192x192 512x512",
-        type: "image/png",
-        purpose: "any maskable"
+        src: iconUrl,
+        sizes: '192x192 512x512',
+        type: 'image/png',
+        purpose: 'any maskable'
       }
     ]
   };
-  const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+
   const link = document.createElement('link');
   link.rel = 'manifest';
-  link.href = URL.createObjectURL(manifestBlob);
+  link.href = 'data:application/manifest+json;charset=utf-8,' + encodeURIComponent(JSON.stringify(manifest));
   document.head.appendChild(link);
-
-  if ('serviceWorker' in navigator) {
-    const swCode = `
-      self.addEventListener('install', () => self.skipWaiting());
-      self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
-      self.addEventListener('fetch', () => {});
-    `;
-    const swBlob = new Blob([swCode], { type: 'application/javascript' });
-    navigator.serviceWorker.register(URL.createObjectURL(swBlob)).catch(() => {});
-  }
 
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
@@ -268,12 +257,10 @@ function agruparHorasPorSaltosDeDia(horasTotales) {
   let horaAnteriorNum = null;
 
   horasTotales.forEach((item, idx) => {
-    const horaNum = extraerNumeroHora(item.hora);
-    if (idx > 0 && horaNum !== null && horaAnteriorNum !== null) {
-      if (horaNum < horaAnteriorNum) {
-        diaActualIdx++;
-        grupos[diaActualIdx] = [];
-      }
+    const horaNum = item._horaNum ?? extraerNumeroHora(item.hora);
+    if (idx > 0 && horaNum !== null && horaAnteriorNum !== null && horaNum < horaAnteriorNum) {
+      diaActualIdx++;
+      grupos[diaActualIdx] = [];
     }
     if (horaNum !== null) horaAnteriorNum = horaNum;
     grupos[diaActualIdx].push(item);
@@ -284,20 +271,12 @@ function agruparHorasPorSaltosDeDia(horasTotales) {
 
 function obtenerHorasParaDia(data, diaObj, indexEnLista) {
   if (!data || !diaObj) return [];
-
-  if (Array.isArray(diaObj.horas) && diaObj.horas.length > 0) {
-    return diaObj.horas;
-  }
-  if (Array.isArray(diaObj.hoy_horas) && diaObj.hoy_horas.length > 0) {
-    return diaObj.hoy_horas;
-  }
-  if (Array.isArray(data.horas_por_dia?.[indexEnLista]) && data.horas_por_dia[indexEnLista].length > 0) {
-    return data.horas_por_dia[indexEnLista];
-  }
+  if (Array.isArray(diaObj.horas) && diaObj.horas.length > 0) return diaObj.horas;
 
   if (Array.isArray(data.hoy_horas) && data.hoy_horas.length > 0) {
     if (diaObj.fecha) {
-      const porFecha = data.hoy_horas.filter(h => h.fecha && String(h.fecha).startsWith(String(diaObj.fecha).slice(0, 10)));
+      const fechaDia = String(diaObj.fecha).slice(0, 10);
+      const porFecha = data.hoy_horas.filter(h => h.fecha && String(h.fecha).startsWith(fechaDia));
       if (porFecha.length > 0) return porFecha;
     }
     const grupos = agruparHorasPorSaltosDeDia(data.hoy_horas);
@@ -316,39 +295,26 @@ function obtenerEstadoSincronizado(data) {
 
   let poolHoras = [];
   if (Array.isArray(data.hoy_horas) && data.hoy_horas.length > 0) {
-    poolHoras = [...data.hoy_horas];
+    poolHoras = data.hoy_horas;
   } else if (Array.isArray(data.proximos_dias)) {
     data.proximos_dias.forEach((d, idx) => {
       const hDia = obtenerHorasParaDia(data, d, idx);
       if (hDia.length > 0) {
-        poolHoras.push(...hDia.map(h => ({ ...h, _diaIdx: idx, fecha: h.fecha || d.fecha })));
+        poolHoras.push(...hDia.map(h => ({ ...h, fecha: h.fecha || d.fecha })));
       }
     });
   }
 
   let horasFuturas = [];
-
   if (poolHoras.length > 0) {
-    const tienenFecha = poolHoras.some(h => Boolean(h.fecha));
-
-    if (tienenFecha) {
-      horasFuturas = poolHoras.filter(h => {
-        const fechaItem = String(h.fecha || '').slice(0, 10);
-        const horaNum = extraerNumeroHora(h.hora);
-        if (!fechaItem || horaNum === null) return true;
-        if (fechaItem > fechaHoyISO) return true;
-        if (fechaItem === fechaHoyISO) return horaNum >= horaActualNum;
-        return false;
-      });
-    } else {
-      const grupos = agruparHorasPorSaltosDeDia(poolHoras);
-      const grupoHoy = (grupos[0] || []).filter(h => {
-        const horaNum = extraerNumeroHora(h.hora);
-        return horaNum === null || horaNum >= horaActualNum;
-      });
-      const restoGrupos = grupos.slice(1).flat();
-      horasFuturas = [...grupoHoy, ...restoGrupos];
-    }
+    horasFuturas = poolHoras.filter(h => {
+      const fechaItem = String(h.fecha || '').slice(0, 10);
+      const horaNum = h._horaNum ?? extraerNumeroHora(h.hora);
+      if (!fechaItem || horaNum === null) return true;
+      if (fechaItem > fechaHoyISO) return true;
+      if (fechaItem === fechaHoyISO) return horaNum >= horaActualNum;
+      return false;
+    });
   }
 
   if (horasFuturas.length === 0 && poolHoras.length > 0) {
@@ -367,38 +333,14 @@ function obtenerEstadoSincronizado(data) {
     icono: primerValorDefinido(horaEnCurso.icono, baseActual.icono, 'cloud'),
     humedad: primerValorDefinido(horaEnCurso.humedad, baseActual.humedad),
     viento_kmh: primerValorDefinido(horaEnCurso.viento_kmh, baseActual.viento_kmh),
-    sensacion_termica: primerValorDefinido(
-      horaEnCurso.sensacion_termica, horaEnCurso.sensTermica, horaEnCurso.sens_termica,
-      baseActual.sensacion_termica, baseActual.sensTermica, baseActual.sens_termica,
-      horaEnCurso.temperatura, baseActual.temperatura
-    ),
-    prob_precipitacion: primerValorDefinido(
-      horaEnCurso.prob_precipitacion, horaEnCurso.probPrecipitacion, horaEnCurso.prob_lluvia,
-      baseActual.prob_precipitacion, baseActual.probPrecipitacion
-    ),
-    precipitacion_mm: primerValorDefinido(
-      horaEnCurso.precipitacion_mm, horaEnCurso.lluvia_mm, horaEnCurso.precipitacion,
-      baseActual.precipitacion_mm, baseActual.lluvia_mm, baseActual.precipitacion
-    ),
-    cota_nieve: primerValorDefinido(
-      horaEnCurso.cota_nieve, horaEnCurso.cotaNieve,
-      baseActual.cota_nieve, baseActual.cotaNieve
-    ),
-    prob_tormenta: primerValorDefinido(
-      horaEnCurso.prob_tormenta, horaEnCurso.probTormenta,
-      baseActual.prob_tormenta, baseActual.probTormenta
-    ),
-    rachas_viento: primerValorDefinido(
-      horaEnCurso.rachas_viento, horaEnCurso.racha_max, horaEnCurso.racha,
-      baseActual.rachas_viento, baseActual.racha_max, baseActual.racha
-    ),
-    direccion_viento: primerValorDefinido(
-      horaEnCurso.direccion_viento, horaEnCurso.viento_dir, horaEnCurso.direccion,
-      baseActual.direccion_viento, baseActual.viento_dir, baseActual.direccion
-    ),
-    uv: primerValorDefinido(
-      horaEnCurso.uv, baseActual.uv, baseActual.uv_max, baseActual.indice_uv
-    )
+    sensacion_termica: primerValorDefinido(horaEnCurso.sensacion_termica, baseActual.sensacion_termica, horaEnCurso.temperatura, baseActual.temperatura),
+    prob_precipitacion: primerValorDefinido(horaEnCurso.prob_precipitacion, baseActual.prob_precipitacion),
+    precipitacion_mm: primerValorDefinido(horaEnCurso.precipitacion_mm, baseActual.precipitacion_mm),
+    cota_nieve: primerValorDefinido(horaEnCurso.cota_nieve, baseActual.cota_nieve),
+    prob_tormenta: primerValorDefinido(horaEnCurso.prob_tormenta, baseActual.prob_tormenta),
+    rachas_viento: primerValorDefinido(horaEnCurso.rachas_viento, baseActual.rachas_viento),
+    direccion_viento: primerValorDefinido(horaEnCurso.direccion_viento, baseActual.direccion_viento),
+    uv: primerValorDefinido(horaEnCurso.uv, baseActual.uv)
   };
 
   return { actualSincronizado, proximas24Horas };
@@ -408,38 +350,14 @@ function extraerDatosAvanzadosActuales(data, actualSincronizado) {
   const actual = actualSincronizado || data.actual || {};
   const dia0 = (Array.isArray(data.proximos_dias) && data.proximos_dias[0]) || {};
 
-  const uv = primerValorDefinido(
-    actual.uv, actual.uv_max, actual.indice_uv, actual.radiacion_uv,
-    dia0.uv, dia0.uv_max, dia0.indice_uv
-  );
-
-  const nieveRaw = primerValorDefinido(
-    actual.cota_nieve, actual.cotaNieve, actual.nieve,
-    dia0.cota_nieve, dia0.cotaNieve, dia0.nieve
-  );
-
-  const tormenta = primerValorDefinido(
-    actual.prob_tormenta, actual.probTormenta, actual.tormenta,
-    dia0.prob_tormenta, dia0.probTormenta, dia0.tormenta
-  );
-
-  const sensacion = primerValorDefinido(
-    actual.sensacion_termica, actual.sensTermica, actual.sens_termica, actual.sensacion,
-    actual.temperatura
-  );
-
-  const racha = primerValorDefinido(
-    actual.rachas_viento, actual.racha_max, actual.rachaMax, actual.racha_viento, actual.racha,
-    dia0.rachas_viento, dia0.racha_max, dia0.racha_viento, dia0.racha,
-    actual.viento_kmh
-  );
-
-  const direccion = primerValorDefinido(
-    actual.direccion_viento, actual.viento_direccion, actual.viento_dir, actual.dir_viento, actual.direccion,
-    dia0.direccion_viento, dia0.viento_direccion, dia0.viento_dir, dia0.dir_viento, dia0.direccion
-  );
-
-  return { uv, nieveRaw, tormenta, sensacion, racha, direccion };
+  return {
+    uv: primerValorDefinido(actual.uv, dia0.uv_max),
+    nieveRaw: primerValorDefinido(actual.cota_nieve, dia0.cota_nieve),
+    tormenta: primerValorDefinido(actual.prob_tormenta, dia0.prob_tormenta),
+    sensacion: primerValorDefinido(actual.sensacion_termica, actual.temperatura),
+    racha: primerValorDefinido(actual.rachas_viento, dia0.racha_max, actual.viento_kmh),
+    direccion: primerValorDefinido(actual.direccion_viento, dia0.direccion_viento)
+  };
 }
 
 /* --- ALERTAS Y MODAL DETALLADO DE AVISOS --- */
@@ -472,15 +390,6 @@ function obtenerEstilosNivelAlerta(nivelRaw) {
       descripcionFallback: 'No existe riesgo meteorológico para la población en general, aunque sí para alguna actividad concreta expuesta al fenómeno.'
     };
   }
-  if (nivelNorm.includes('especial')) {
-    return {
-      etiqueta: 'Aviso Especial AEMET',
-      etiquetaCorta: 'Aviso Especial',
-      badgeStyle: 'background-color: rgba(168, 85, 247, 0.18); border: 1px solid rgba(168, 85, 247, 0.5); color: #c084fc;',
-      iconWrapStyle: 'background-color: rgba(168, 85, 247, 0.18); color: #c084fc;',
-      descripcionFallback: 'Episodio meteorológico adverso destacado emitido por la Agencia Estatal de Meteorología.'
-    };
-  }
   const limpio = String(nivelRaw || 'Activo');
   return {
     etiqueta: limpio.toLowerCase().startsWith('aviso') ? limpio : `Aviso ${limpio}`,
@@ -492,46 +401,20 @@ function obtenerEstilosNivelAlerta(nivelRaw) {
 }
 
 function extraerAlertasActivas(data) {
-  if (!data) return [];
-  const fuentes = [
-    data.alertas,
-    data.avisos,
-    data.municipio?.alertas,
-    data.municipio?.avisos,
-    data.actual?.alertas,
-    data.proximos_dias?.[0]?.alertas
-  ];
-
-  const listaBruta = [];
-  fuentes.forEach(f => {
-    if (Array.isArray(f)) listaBruta.push(...f);
-    else if (f && typeof f === 'object') listaBruta.push(f);
-    else if (typeof f === 'string' && f.trim() !== '') listaBruta.push({ nivel: f.trim() });
-  });
-
+  if (!data || !Array.isArray(data.alertas)) return [];
   const vistas = new Set();
   const alertasLimpias = [];
 
-  listaBruta.forEach(item => {
+  data.alertas.forEach(item => {
     if (!item) return;
-    const nivel = typeof item === 'string'
-      ? item
-      : primerValorDefinido(item.nivel, item.level, item.riesgo, item.severidad, item.tipo, 'Aviso activo');
-    const fenomeno = typeof item === 'object'
-      ? primerValorDefinido(item.fenomeno, item.parametro, item.evento, item.titulo, '')
-      : '';
-    const descripcion = typeof item === 'object'
-      ? primerValorDefinido(item.descripcion, item.detalle, item.comentario, '')
-      : '';
+    const nivel = repararTextoMojibake(String(item.nivel || 'Aviso activo'));
+    const fenomeno = repararTextoMojibake(String(item.fenomeno || ''));
+    const descripcion = repararTextoMojibake(String(item.descripcion || ''));
 
     const clave = `${normalizarTexto(nivel)}-${normalizarTexto(fenomeno)}`;
     if (!vistas.has(clave)) {
       vistas.add(clave);
-      alertasLimpias.push({
-        nivel: repararTextoMojibake(String(nivel)),
-        fenomeno: repararTextoMojibake(String(fenomeno)),
-        descripcion: repararTextoMojibake(String(descripcion))
-      });
+      alertasLimpias.push({ nivel, fenomeno, descripcion });
     }
   });
 
@@ -571,12 +454,15 @@ function abrirModalAlerta(alertaPrincipal, todasLasAlertas = []) {
       const itemBtn = document.createElement('button');
       itemBtn.type = 'button';
       itemBtn.className = 'w-full text-left p-3 rounded-2xl bg-md-surface-container hover:bg-md-surface-container-high transition flex items-center justify-between gap-2 border border-border-color/50';
+      const tituloOtra = `${estOtra.etiquetaCorta}${otra.fenomeno ? ` · ${otra.fenomeno}` : ''}`;
+      const descOtra = otra.descripcion || estOtra.descripcionFallback;
+
       itemBtn.innerHTML = `
         <div class="flex items-center gap-2.5 min-w-0">
           <span class="material-symbols-rounded text-[18px] shrink-0" style="color: ${estOtra.badgeStyle.split('color:')[1] || 'var(--md-primary)'}">warning</span>
           <div class="flex flex-col min-w-0">
-            <span class="text-xs font-bold text-text-main truncate">${estOtra.etiquetaCorta}${otra.fenomeno ? ` · ${otra.fenomeno}` : ''}</span>
-            <span class="text-xs text-text-muted truncate">${otra.descripcion || estOtra.descripcionFallback}</span>
+            <span class="text-xs font-bold text-text-main truncate">${escaparHTML(tituloOtra)}</span>
+            <span class="text-xs text-text-muted truncate">${escaparHTML(descOtra)}</span>
           </div>
         </div>
         <span class="material-symbols-rounded text-text-muted text-base shrink-0">chevron_right</span>
@@ -610,27 +496,29 @@ function cerrarModalAlerta() {
 }
 
 /* --- LÓGICA METEOROLÓGICA --- */
-async function cargarTiempo(ine) {
-  setEstadoCarga(true);
+async function cargarTiempo(ine, silencioso = false) {
+  if (!silencioso) setEstadoCarga(true);
   try {
     const res = await fetch(`${WORKER_URL}?ine=${encodeURIComponent(ine)}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const rawJson = await res.json();
-    currentWeatherData = sanitizarObjetoTexto(rawJson);
-    diaSeleccionadoIndex = null;
+    currentWeatherData = await res.json();
+    lastFetchTimestamp = Date.now();
+    if (!silencioso) diaSeleccionadoIndex = null;
 
     localStorage.setItem('saved_ine', ine);
     renderizarUI();
   } catch (error) {
-    console.error("Fallo al cargar el tiempo:", error);
-    document.getElementById('ui-municipio').textContent = "Error de conexión";
-    mostrarToast("No se pudo conectar con el servidor meteorológico", "cloud_off");
+    console.error('Fallo al cargar el tiempo:', error);
+    if (!currentWeatherData) {
+      document.getElementById('ui-municipio').textContent = 'Error de conexión';
+    }
+    mostrarToast('No se pudo conectar con el servidor meteorológico', 'cloud_off');
   } finally {
-    setEstadoCarga(false);
+    if (!silencioso) setEstadoCarga(false);
   }
 }
 
-function renderizarCarrusel(horasArray, titulo = "Próximas horas", esDiaFuturo = false) {
+function renderizarCarrusel(horasArray, titulo = 'Próximas horas', esDiaFuturo = false) {
   const tituloEl = document.getElementById('titulo-carrusel-horas');
   const btnVolverHoy = document.getElementById('btn-volver-hoy');
 
@@ -660,18 +548,11 @@ function renderizarCarrusel(horasArray, titulo = "Próximas horas", esDiaFuturo 
   carrusel.scrollTo({ left: 0, behavior: 'smooth' });
 
   horasArray.forEach((hora, index) => {
-    const probPrecip = parsearProbabilidadPct(
-      primerValorDefinido(hora.prob_precipitacion, hora.probPrecipitacion, hora.prob_lluvia)
-    );
+    const probPrecip = parsearProbabilidadPct(hora.prob_precipitacion);
+    const precipMm = parsearPrecipitacionMm(hora.precipitacion_mm);
 
-    const precipMm = parsearPrecipitacionMm(
-      primerValorDefinido(hora.precipitacion_mm, hora.lluvia_mm, hora.precipitacion)
-    );
-
-    let bloquePrecipitacionHTML = '';
     const probMostrar = probPrecip !== null ? probPrecip : 0;
-
-    bloquePrecipitacionHTML += `
+    let bloquePrecipitacionHTML = `
       <div class="flex items-center gap-[2px] text-md-primary" title="Probabilidad de precipitación">
         <span class="material-symbols-rounded text-[14px]">water_drop</span>
         <span class="text-[11px] font-bold">${probMostrar}%</span>
@@ -690,24 +571,23 @@ function renderizarCarrusel(horasArray, titulo = "Próximas horas", esDiaFuturo 
     let detallesExtraHoraHTML = '';
     const itemsExtraHora = [];
 
-    if (advPrefs.sensacion) {
-      const st = primerValorDefinido(hora.sensacion_termica, hora.sens_termica, hora.sensTermica, hora.sensacion);
-      if (st !== undefined) itemsExtraHora.push(`ST ${st}°`);
+    if (advPrefs.sensacion && hora.sensacion_termica !== undefined) {
+      itemsExtraHora.push(`ST ${escaparHTML(hora.sensacion_termica)}°`);
     }
     if (advPrefs.tormenta) {
-      const torm = parsearProbabilidadPct(primerValorDefinido(hora.prob_tormenta, hora.probTormenta, hora.tormenta));
+      const torm = parsearProbabilidadPct(hora.prob_tormenta);
       if (torm !== null) itemsExtraHora.push(`⚡ ${torm}%`);
     }
     if (advPrefs.viento) {
-      const rachaH = primerValorDefinido(hora.rachas_viento, hora.racha_max, hora.racha, hora.viento_kmh);
-      const dirH = primerValorDefinido(hora.direccion_viento, hora.viento_dir, hora.direccion, '');
-      if (rachaH !== undefined) itemsExtraHora.push(`${rachaH}km/h${dirH ? ' ' + dirH : ''}`);
+      const rachaH = primerValorDefinido(hora.rachas_viento, hora.viento_kmh);
+      const dirH = hora.direccion_viento || '';
+      if (rachaH !== undefined) itemsExtraHora.push(`${escaparHTML(rachaH)}km/h${dirH ? ' ' + escaparHTML(dirH) : ''}`);
     }
     if (advPrefs.nieve) {
-      const nieveH = primerValorDefinido(hora.cota_nieve, hora.cotaNieve, hora.nieve);
-      if (nieveH !== undefined && nieveH !== '0' && nieveH !== 0) {
+      const nieveH = hora.cota_nieve;
+      if (nieveH !== undefined && nieveH !== null && nieveH !== '0' && nieveH !== 0) {
         const nieveTxt = String(nieveH).endsWith('m') ? nieveH : `${nieveH}m`;
-        itemsExtraHora.push(`❄ ${nieveTxt}`);
+        itemsExtraHora.push(`❄ ${escaparHTML(nieveTxt)}`);
       }
     }
 
@@ -720,10 +600,9 @@ function renderizarCarrusel(horasArray, titulo = "Próximas horas", esDiaFuturo 
     }
 
     const esAhora = !esDiaFuturo && index === 0;
-    const etiquetaHora = esAhora ? 'Ahora' : (hora.hora || '--:--');
+    const etiquetaHora = esAhora ? 'Ahora' : escaparHTML(hora.hora || '--:--');
     const card = document.createElement('div');
     const anchoCard = (itemsExtraHora.length > 0 || precipMm > 0) ? 'w-[96px]' : 'w-[84px]';
-    // ring-inset evita cualquier recorte en los bordes del contenedor con scroll
     const bordeAhora = esAhora
       ? 'ring-2 ring-inset ring-md-primary/50 bg-md-surface-container-high/70'
       : 'bg-md-surface-container';
@@ -732,8 +611,8 @@ function renderizarCarrusel(horasArray, titulo = "Próximas horas", esDiaFuturo 
 
     card.innerHTML = `
       <span class="text-xs ${esAhora ? 'font-bold text-md-primary' : 'font-medium text-text-muted'} mb-1.5">${etiquetaHora}</span>
-      <span class="material-symbols-rounded text-[30px] text-md-primary mb-1.5">${hora.icono || 'cloud'}</span>
-      <span class="text-[17px] font-semibold text-text-main leading-none mb-2">${hora.temperatura ?? '--'}°</span>
+      <span class="material-symbols-rounded text-[30px] text-md-primary mb-1.5">${escaparHTML(hora.icono || 'cloud')}</span>
+      <span class="text-[17px] font-semibold text-text-main leading-none mb-2">${escaparHTML(hora.temperatura ?? '--')}°</span>
       <div class="flex flex-col items-center mt-auto">
         ${bloquePrecipitacionHTML}
       </div>
@@ -741,6 +620,31 @@ function renderizarCarrusel(horasArray, titulo = "Próximas horas", esDiaFuturo 
     `;
     carrusel.appendChild(card);
   });
+}
+
+function formatearFechaActualizacion(isoString) {
+  const fecha = isoString ? new Date(isoString) : new Date();
+  if (isNaN(fecha.getTime())) return '';
+
+  const ahora = new Date();
+  const hh = String(fecha.getHours()).padStart(2, '0');
+  const mm = String(fecha.getMinutes()).padStart(2, '0');
+
+  const fechaISO = obtenerFechaLocalISO(fecha);
+  const hoyISO = obtenerFechaLocalISO(ahora);
+
+  if (fechaISO === hoyISO) {
+    return `Última actualización: hoy a las ${hh}:${mm}`;
+  }
+
+  const ayer = new Date(ahora);
+  ayer.setDate(ahora.getDate() - 1);
+  if (fechaISO === obtenerFechaLocalISO(ayer)) {
+    return `Última actualización: ayer a las ${hh}:${mm}`;
+  }
+
+  const fechaCorta = fecha.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+  return `Última actualización: ${fechaCorta} a las ${hh}:${mm}`;
 }
 
 function renderizarUI() {
@@ -756,7 +660,7 @@ function renderizarUI() {
   document.getElementById('ui-viento').textContent = `${actualSincronizado.viento_kmh ?? '--'} km/h`;
   document.getElementById('ui-icono-actual').textContent = actualSincronizado.icono || 'cloud';
 
-  // Alertas y Avisos Meteorológicos (AEMET) -> Al pulsar abre el modal grande superpuesto
+  // Alertas y Avisos Meteorológicos (AEMET)
   const alertasDiv = document.getElementById('ui-alertas');
   const alertasActivas = extraerAlertasActivas(data);
 
@@ -775,7 +679,7 @@ function renderizarUI() {
         badge.className = 'px-3.5 py-1.5 rounded-full flex items-center gap-1.5 text-xs font-semibold shadow-sm transition hover:opacity-90 active:scale-95 cursor-pointer';
         badge.innerHTML = `
           <span class="material-symbols-rounded text-[16px]">warning</span>
-          <span>${estilos.etiquetaCorta}${textoFenomeno}</span>
+          <span>${escaparHTML(estilos.etiquetaCorta + textoFenomeno)}</span>
         `;
 
         badge.addEventListener('click', () => {
@@ -804,37 +708,30 @@ function renderizarUI() {
 
     const crearChipExtra = (icono, etiqueta, valor) => `
       <div class="flex items-center gap-2.5 bg-md-surface/75 px-3.5 py-2.5 rounded-2xl border border-border-color/60 flex-1 min-w-[138px] max-w-[210px]">
-        <span class="material-symbols-rounded text-[20px] text-md-primary shrink-0">${icono}</span>
+        <span class="material-symbols-rounded text-[20px] text-md-primary shrink-0">${escaparHTML(icono)}</span>
         <div class="flex flex-col min-w-0">
-          <span class="text-[10px] font-semibold uppercase tracking-wider text-text-muted leading-none truncate">${etiqueta}</span>
-          <span class="text-sm font-semibold text-text-main leading-tight mt-1 truncate">${valor}</span>
+          <span class="text-[10px] font-semibold uppercase tracking-wider text-text-muted leading-none truncate">${escaparHTML(etiqueta)}</span>
+          <span class="text-sm font-semibold text-text-main leading-tight mt-1 truncate">${escaparHTML(valor)}</span>
         </div>
       </div>
     `;
 
     if (advPrefs.sensacion) {
-      const valSens = sensacion !== undefined ? `${sensacion}°` : '--°';
-      tarjetasExtra.push(crearChipExtra('thermostat', 'Sensación', valSens));
+      tarjetasExtra.push(crearChipExtra('thermostat', 'Sensación', sensacion !== undefined ? `${sensacion}°` : '--°'));
     }
-
     if (advPrefs.uv) {
-      const valUv = uv !== undefined ? `${uv}` : '--';
-      tarjetasExtra.push(crearChipExtra('wb_sunny', 'Índice UV', valUv));
+      tarjetasExtra.push(crearChipExtra('wb_sunny', 'Índice UV', uv !== undefined ? `${uv}` : '--'));
     }
-
     if (advPrefs.tormenta) {
-      const valTormenta = tormenta !== undefined ? `${tormenta}%` : '0%';
-      tarjetasExtra.push(crearChipExtra('thunderstorm', 'Tormenta', valTormenta));
+      tarjetasExtra.push(crearChipExtra('thunderstorm', 'Tormenta', tormenta !== undefined ? `${tormenta}%` : '0%'));
     }
-
     if (advPrefs.nieve) {
       let valNieve = 'Sin nieve';
-      if (nieveRaw !== undefined && nieveRaw !== 0 && nieveRaw !== '0') {
+      if (nieveRaw !== undefined && nieveRaw !== null && nieveRaw !== 0 && nieveRaw !== '0') {
         valNieve = String(nieveRaw).endsWith('m') ? String(nieveRaw) : `${nieveRaw} m`;
       }
       tarjetasExtra.push(crearChipExtra('ac_unit', 'Cota nieve', valNieve));
     }
-
     if (advPrefs.viento) {
       const velTxt = racha !== undefined ? `${racha} km/h` : '-- km/h';
       const dirTxt = direccion ? ` ${direccion}` : '';
@@ -856,28 +753,17 @@ function renderizarUI() {
       renderizarCarrusel(horasDiaSel, `Horas: ${repararTextoMojibake(diaSel.dia_semana)}`, true);
     } else {
       diaSeleccionadoIndex = null;
-      renderizarCarrusel(proximas24Horas, "Próximas horas", false);
+      renderizarCarrusel(proximas24Horas, 'Próximas horas', false);
     }
   } else {
-    renderizarCarrusel(proximas24Horas, "Próximas horas", false);
+    renderizarCarrusel(proximas24Horas, 'Próximas horas', false);
   }
 
   renderizarListaDias(data);
 
-  // Mostrar la hora de la última actualización
   const actualizacionEl = document.getElementById('ui-ultima-act');
   if (actualizacionEl) {
-    if (data.actualizado_en) {
-      const fechaAemet = new Date(data.actualizado_en);
-      const hh = String(fechaAemet.getHours()).padStart(2, '0');
-      const mm = String(fechaAemet.getMinutes()).padStart(2, '0');
-      actualizacionEl.textContent = `Última actualización: hoy a las ${hh}:${mm}`;
-    } else {
-      const ahora = new Date();
-      const hh = String(ahora.getHours()).padStart(2, '0');
-      const mm = String(ahora.getMinutes()).padStart(2, '0');
-      actualizacionEl.textContent = `Última actualización de datos: hoy a las ${hh}:${mm}`;
-    }
+    actualizacionEl.textContent = formatearFechaActualizacion(data.actualizado_en);
   }
 }
 
@@ -904,7 +790,7 @@ function renderizarListaDias(data) {
     row.className = `flex justify-between items-center p-4 border-b border-border-color last:border-0 transition-all ${clasesInteractivas} ${clasesSeleccionado}`;
 
     if (hasHoras) {
-      row.onclick = () => {
+      row.addEventListener('click', () => {
         if (diaSeleccionadoIndex === index) {
           diaSeleccionadoIndex = null;
           renderizarUI();
@@ -917,26 +803,24 @@ function renderizarListaDias(data) {
             window.scrollTo({ top: y, behavior: 'smooth' });
           }
         }
-      };
+      });
     }
 
-    const probPrecipDia = parsearProbabilidadPct(
-      primerValorDefinido(dia.prob_precipitacion, dia.probPrecipitacion, dia.prob_lluvia)
-    ) ?? 0;
+    const probPrecipDia = parsearProbabilidadPct(dia.prob_precipitacion) ?? 0;
 
     row.innerHTML = `
       <div class="flex flex-col w-28">
-        <span class="font-medium text-text-main leading-tight">${repararTextoMojibake(dia.dia_semana)}</span>
+        <span class="font-medium text-text-main leading-tight">${escaparHTML(repararTextoMojibake(dia.dia_semana))}</span>
         ${hasHoras ? `<span class="text-[11px] text-md-primary font-medium mt-0.5">${isSelected ? 'Viendo por horas' : 'Ver por horas'}</span>` : ''}
       </div>
       <div class="flex items-center gap-1.5 w-20">
-        <span class="material-symbols-rounded text-md-primary text-[24px]">${dia.icono || 'cloud'}</span>
+        <span class="material-symbols-rounded text-md-primary text-[24px]">${escaparHTML(dia.icono || 'cloud')}</span>
         <span class="text-xs font-bold ${probPrecipDia > 0 ? 'text-md-primary' : 'text-text-muted/60'}">${probPrecipDia}%</span>
       </div>
       <div class="flex gap-1 text-right w-auto items-center">
         <div class="flex gap-3 w-20 justify-end">
-          <span class="font-semibold text-text-main">${dia.temp_max}°</span>
-          <span class="text-text-muted">${dia.temp_min}°</span>
+          <span class="font-semibold text-text-main">${escaparHTML(dia.temp_max)}°</span>
+          <span class="text-text-muted">${escaparHTML(dia.temp_min)}°</span>
         </div>
         ${hasHoras
           ? `<span class="material-symbols-rounded text-lg ml-1 transition-transform ${isSelected ? 'text-md-primary rotate-90' : 'text-text-muted opacity-70'}">chevron_right</span>`
@@ -997,7 +881,7 @@ function ubicarPorGPS(iconoEl, textoEl, callbackOnSuccess = null) {
       if (callbackOnSuccess) {
         callbackOnSuccess(municipioMasCercano.id_ine);
       } else {
-        seleccionarMunicipio(municipioMasCercano.id_ine);
+        window.seleccionarMunicipio(municipioMasCercano.id_ine);
       }
     }
   }, () => {
@@ -1008,7 +892,7 @@ function ubicarPorGPS(iconoEl, textoEl, callbackOnSuccess = null) {
   });
 }
 
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', () => {
   const bottomNav = document.getElementById('bottom-nav');
   const welcomeModal = document.getElementById('welcome-modal');
   const btnWelcomeGps = document.getElementById('btn-welcome-gps');
@@ -1051,7 +935,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const iosPwaModal = document.getElementById('ios-pwa-modal');
   const btnCloseIosModal = document.getElementById('btn-close-ios-modal');
   const btnOkIosModal = document.getElementById('btn-ok-ios-modal');
-  
+
   const btnPrivacy = document.getElementById('btn-privacy');
   const privacyModal = document.getElementById('privacy-modal');
   const privacyModalPanel = document.getElementById('privacy-modal-panel');
@@ -1120,12 +1004,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     searchInput.value = '';
     searchResults.innerHTML = '';
     btnGps.classList.remove('hidden');
-    
+
     if (!localStorage.getItem('saved_ine')) {
       welcomeModal.classList.remove('hidden');
       welcomeModal.classList.add('flex');
-    } else {
-      if (volverATiempo) actualizarBarraNavegacion('tiempo');
+    } else if (volverATiempo) {
+      actualizarBarraNavegacion('tiempo');
     }
   };
 
@@ -1180,9 +1064,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
+  // Al volver a la pestaña/app: si los datos tienen más de 30 min, refrescar desde el Worker
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && currentWeatherData) {
-      renderizarUI();
+    if (document.visibilityState === 'visible') {
+      const savedIne = localStorage.getItem('saved_ine');
+      if (savedIne && (Date.now() - lastFetchTimestamp > MAX_DATA_AGE_MS)) {
+        cargarTiempo(savedIne, true);
+      } else if (currentWeatherData) {
+        renderizarUI();
+      }
     }
   });
 
@@ -1191,7 +1081,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     btnWelcomeSearch.addEventListener('click', () => {
       welcomeModal.classList.add('hidden');
       welcomeModal.classList.remove('flex');
-      
+
       searchModal.classList.remove('hidden');
       searchModal.classList.add('flex');
       searchInput.focus();
@@ -1205,7 +1095,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     btnWelcomeGps.addEventListener('click', () => {
       ubicarPorGPS(iconoWelcomeGps, textoWelcomeGps, (ine) => {
         trackEvent('use_gps', { location_id: ine });
-        seleccionarMunicipio(ine);
+        window.seleccionarMunicipio(ine);
       });
     });
   }
@@ -1242,18 +1132,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     }).slice(0, 15);
 
     if (filtrados.length === 0) {
-      searchResults.innerHTML = `<div class="p-8 text-center text-text-muted">No se encontraron municipios para "${queryRaw}"</div>`;
+      searchResults.innerHTML = `<div class="p-8 text-center text-text-muted">No se encontraron municipios para "${escaparHTML(queryRaw)}"</div>`;
       return;
     }
 
     searchResults.innerHTML = filtrados.map(m => `
-      <div class="p-4 flex flex-col border-b border-border-color active:bg-md-surface-container hover:bg-md-surface-container/50 cursor-pointer transition" 
-           onclick="seleccionarMunicipio('${m.id_ine}')">
-        <span class="font-medium text-lg text-text-main">${m.nombre}</span>
-        <span class="text-sm text-text-muted">${m.provincia}</span>
+      <div class="p-4 flex flex-col border-b border-border-color active:bg-md-surface-container hover:bg-md-surface-container/50 cursor-pointer transition"
+           data-ine="${escaparHTML(m.id_ine)}">
+        <span class="font-medium text-lg text-text-main">${escaparHTML(m.nombre)}</span>
+        <span class="text-sm text-text-muted">${escaparHTML(m.provincia)}</span>
       </div>
     `).join('');
   };
+
+  if (searchResults) {
+    searchResults.addEventListener('click', (e) => {
+      const item = e.target.closest('[data-ine]');
+      if (item && item.dataset.ine) {
+        window.seleccionarMunicipio(item.dataset.ine);
+      }
+    });
+  }
 
   if (btnSearch) {
     btnSearch.addEventListener('click', () => {
@@ -1275,7 +1174,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     btnGps.addEventListener('click', () => {
       ubicarPorGPS(iconoGps, textoGps, (ine) => {
         trackEvent('use_gps', { location_id: ine });
-        seleccionarMunicipio(ine);
+        window.seleccionarMunicipio(ine);
       });
     });
   }
@@ -1285,11 +1184,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   window.seleccionarMunicipio = (ine) => {
+    const ineNormalizado = String(ine).padStart(5, '0');
     closeSearchModal(true);
-    
-    const munData = municipiosDB.find(m => m.id_ine === ine);
-    const nombreMun = munData ? munData.nombre : ine;
-    trackEvent('select_location', { location_id: ine, location_name: nombreMun });
+
+    const munData = municipiosDB.find(m => m.id_ine === ineNormalizado);
+    const nombreMun = munData ? munData.nombre : ineNormalizado;
+    trackEvent('select_location', { location_id: ineNormalizado, location_name: nombreMun });
 
     if (welcomeModal && !welcomeModal.classList.contains('hidden')) {
       welcomeModal.classList.add('hidden');
@@ -1299,9 +1199,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         bottomNav.classList.add('flex');
       }
     }
-    
-    document.getElementById('ui-municipio').textContent = "Cargando...";
-    cargarTiempo(ine);
+
+    document.getElementById('ui-municipio').textContent = munData ? munData.nombre : 'Cargando...';
+    cargarTiempo(ineNormalizado);
   };
 
   /* --- MENÚ DE OPCIONES --- */
@@ -1323,7 +1223,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
   if (isStandalone && pwaInstallSection) pwaInstallSection.classList.add('hidden');
 
-  /* RASTREO EN ELEMENTOS DEL MENÚ DE OPCIONES */
   if (btnInstallPwa) {
     btnInstallPwa.addEventListener('click', async () => {
       trackEvent('options_menu_click', { button: 'install_pwa' });
@@ -1369,7 +1268,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           await navigator.clipboard.writeText(shareData.url);
           closeOptionsModal(true);
           mostrarToast('Enlace copiado al portapapeles', 'content_copy');
-        } catch (err) {
+        } catch {
           mostrarToast('No se pudo copiar el enlace', 'error');
         }
       }
@@ -1456,16 +1355,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     const savedColorInit = localStorage.getItem('app_color') || 'blue';
     if (savedColorInit.startsWith('#')) colorPicker.value = savedColorInit;
 
-    const aplicarColorPersonalizado = (e) => {
+    // Previsualización fluida a 60fps sin saturar Analytics ni localStorage
+    colorPicker.addEventListener('input', (e) => {
+      const hex = e.target.value;
+      document.documentElement.setAttribute('data-color', 'custom');
+      customColorPreview.style.background = hex;
+      window.applyCustomColor(hex);
+    });
+
+    // Guardado y evento Analytics únicamente al soltar el selector
+    colorPicker.addEventListener('change', (e) => {
       const hex = e.target.value;
       localStorage.setItem('app_color', hex);
       trackEvent('change_color', { color: 'custom', hex_value: hex });
       document.documentElement.setAttribute('data-color', 'custom');
       updateSettingsUI();
-    };
-
-    colorPicker.addEventListener('input', aplicarColorPersonalizado);
-    colorPicker.addEventListener('change', aplicarColorPersonalizado);
+    });
   }
 
   /* --- DESPLEGABLE DE DATOS METEOROLÓGICOS EXTRA --- */
@@ -1494,7 +1399,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   updateSettingsUI();
   actualizarBarraNavegacion('tiempo');
 
-  /* --- CARGA INICIAL --- */
+  /* --- CARGA INICIAL EN PARALELO --- */
   const cargarMunicipiosDB = async () => {
     try {
       const res = await fetch('municipios.json');
@@ -1505,6 +1410,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           const provLimpia = repararTextoMojibake(m.provincia);
           return {
             ...m,
+            id_ine: String(m.id_ine).padStart(5, '0'),
             nombre: nombreLimpio,
             provincia: provLimpia,
             _nombreNorm: normalizarTexto(nombreLimpio),
@@ -1516,8 +1422,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       }
     } catch (error) {
-      console.error("No se pudo cargar la base de datos de municipios", error);
-      mostrarToast("Error al cargar la lista de municipios", "error");
+      console.error('No se pudo cargar la base de datos de municipios', error);
+      mostrarToast('Error al cargar la lista de municipios', 'error');
     } finally {
       municipiosCargando = false;
       if (searchModal && !searchModal.classList.contains('hidden')) {
@@ -1526,10 +1432,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   };
 
-  const iniciarApp = async () => {
-    await cargarMunicipiosDB();
+  const iniciarApp = () => {
     const savedIne = localStorage.getItem('saved_ine');
-    
+
     if (!savedIne) {
       welcomeModal.classList.remove('hidden');
       welcomeModal.classList.add('flex');
@@ -1537,8 +1442,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         bottomNav.classList.add('hidden');
         bottomNav.classList.remove('flex');
       }
+      cargarMunicipiosDB();
     } else {
-      await cargarTiempo(savedIne);
+      // Ejecutar petición meteorológica y carga de municipios simultáneamente
+      Promise.all([
+        cargarTiempo(savedIne),
+        cargarMunicipiosDB()
+      ]);
     }
   };
 
