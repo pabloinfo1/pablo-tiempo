@@ -162,7 +162,7 @@ function setEstadoCarga(cargando) {
   }
 }
 
-/* --- BLOQUEO DE ZOOM POR DOBLE TOQUE Y PINCH EN iOS --- */
+/* --- BLOQUEO DE ZOOM iOS Y ARRASTRE DE RATÓN EN PC --- */
 function bloquearZoomIOS() {
   let lastTouchEnd = 0;
   document.addEventListener('touchend', (event) => {
@@ -176,6 +176,44 @@ function bloquearZoomIOS() {
   document.addEventListener('gesturestart', (event) => {
     event.preventDefault();
   }, { passive: false });
+}
+
+function habilitarScrollArrastre(contenedor) {
+  if (!contenedor) return;
+  let isDown = false;
+  let startX;
+  let scrollLeft;
+
+  contenedor.classList.add('cursor-grab');
+
+  contenedor.addEventListener('mousedown', (e) => {
+    isDown = true;
+    contenedor.classList.add('cursor-grabbing');
+    contenedor.classList.remove('cursor-grab', 'snap-x', 'scroll-smooth');
+    startX = e.pageX - contenedor.offsetLeft;
+    scrollLeft = contenedor.scrollLeft;
+  });
+
+  contenedor.addEventListener('mouseleave', () => {
+    if (!isDown) return;
+    isDown = false;
+    contenedor.classList.remove('cursor-grabbing');
+    contenedor.classList.add('cursor-grab', 'snap-x', 'scroll-smooth');
+  });
+
+  contenedor.addEventListener('mouseup', () => {
+    isDown = false;
+    contenedor.classList.remove('cursor-grabbing');
+    contenedor.classList.add('cursor-grab', 'snap-x', 'scroll-smooth');
+  });
+
+  contenedor.addEventListener('mousemove', (e) => {
+    if (!isDown) return;
+    e.preventDefault();
+    const x = e.pageX - contenedor.offsetLeft;
+    const walk = (x - startX) * 2.5; // Velocidad de desplazamiento
+    contenedor.scrollLeft = scrollLeft - walk;
+  });
 }
 
 bloquearZoomIOS();
@@ -562,7 +600,7 @@ function renderizarCarrusel(horasArray, titulo = 'Próximas horas', esDiaFuturo 
     if (precipMm > 0) {
       const mmFormateado = Number.isInteger(precipMm) ? precipMm : precipMm.toFixed(1).replace('.0', '');
       bloquePrecipitacionHTML += `
-        <span class="mt-1 px-1.5 py-0.5 rounded-md bg-md-primary/15 text-md-primary text-[10px] font-semibold leading-none whitespace-nowrap" title="Precipitación acumulada prevista">
+        <span class="mt-1 px-1.5 py-0.5 rounded-md bg-md-surface-container border border-md-primary text-md-primary text-[10px] font-semibold leading-none whitespace-nowrap" title="Precipitación acumulada prevista">
           💧 ${mmFormateado} mm
         </span>
       `;
@@ -604,7 +642,7 @@ function renderizarCarrusel(horasArray, titulo = 'Próximas horas', esDiaFuturo 
     const card = document.createElement('div');
     const anchoCard = (itemsExtraHora.length > 0 || precipMm > 0) ? 'w-[96px]' : 'w-[84px]';
     const bordeAhora = esAhora
-      ? 'ring-2 ring-inset ring-md-primary/50 bg-md-surface-container-high/70'
+      ? 'ring-2 ring-inset ring-md-primary bg-md-surface-container-high'
       : 'bg-md-surface-container';
 
     card.className = `snap-start shrink-0 ${bordeAhora} rounded-2xl p-3.5 flex flex-col items-center ${anchoCard} shadow-sm transition-all`;
@@ -781,10 +819,10 @@ function renderizarListaDias(data) {
 
     const row = document.createElement('div');
     const clasesInteractivas = hasHoras
-      ? 'cursor-pointer hover:bg-md-surface-container-high/60 active:bg-md-surface-container-high'
+      ? 'cursor-pointer hover:bg-md-surface-container-high active:bg-md-surface-container-high'
       : '';
     const clasesSeleccionado = isSelected
-      ? 'bg-md-surface-container-high/80 border-l-4 border-l-md-primary'
+      ? 'bg-md-surface-container-high border-l-4 border-l-md-primary'
       : '';
 
     row.className = `flex justify-between items-center p-4 border-b border-border-color last:border-0 transition-all ${clasesInteractivas} ${clasesSeleccionado}`;
@@ -815,7 +853,7 @@ function renderizarListaDias(data) {
       </div>
       <div class="flex items-center gap-1.5 w-20">
         <span class="material-symbols-rounded text-md-primary text-[24px]">${escaparHTML(dia.icono || 'cloud')}</span>
-        <span class="text-xs font-bold ${probPrecipDia > 0 ? 'text-md-primary' : 'text-text-muted/60'}">${probPrecipDia}%</span>
+        <span class="text-xs font-bold ${probPrecipDia > 0 ? 'text-md-primary' : 'text-text-muted opacity-60'}">${probPrecipDia}%</span>
       </div>
       <div class="flex gap-1 text-right w-auto items-center">
         <div class="flex gap-3 w-20 justify-end">
@@ -945,6 +983,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const alertModal = document.getElementById('alert-modal');
   const btnCloseAlertModal = document.getElementById('btn-close-alert-modal');
   const btnOkAlertModal = document.getElementById('btn-ok-alert-modal');
+
+  // Habilitar arrastre con ratón en el carrusel para PC
+  const carruselHoras = document.getElementById('ui-carrusel-horas');
+  if (carruselHoras) {
+    habilitarScrollArrastre(carruselHoras);
+  }
 
   /* --- DETECCIÓN MÓVIL PARA EL WELCOME HINT --- */
   const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
