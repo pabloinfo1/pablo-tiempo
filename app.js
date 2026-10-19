@@ -864,14 +864,14 @@ function renderizarUI() {
 
   renderizarListaDias(data);
 
-  // Mostrar la hora de la última actualización (AEMET API o fallback a hora local)
+  // Mostrar la hora de la última actualización
   const actualizacionEl = document.getElementById('ui-ultima-act');
   if (actualizacionEl) {
     if (data.actualizado_en) {
       const fechaAemet = new Date(data.actualizado_en);
       const hh = String(fechaAemet.getHours()).padStart(2, '0');
       const mm = String(fechaAemet.getMinutes()).padStart(2, '0');
-      actualizacionEl.textContent = `Última actualización (API AEMET): hoy a las ${hh}:${mm}`;
+      actualizacionEl.textContent = `Última actualización: hoy a las ${hh}:${mm}`;
     } else {
       const ahora = new Date();
       const hh = String(ahora.getHours()).padStart(2, '0');
@@ -1015,6 +1015,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const btnWelcomeSearch = document.getElementById('btn-welcome-search');
   const iconoWelcomeGps = document.getElementById('icono-welcome-gps');
   const textoWelcomeGps = document.getElementById('texto-welcome-gps');
+  const welcomeHintContainer = document.getElementById('welcome-hint-container');
+  const welcomePrivacyLink = document.getElementById('welcome-privacy-link');
 
   const btnTiempo = document.getElementById('btn-tiempo');
   const btnVolverHoy = document.getElementById('btn-volver-hoy');
@@ -1049,13 +1051,68 @@ document.addEventListener('DOMContentLoaded', async () => {
   const iosPwaModal = document.getElementById('ios-pwa-modal');
   const btnCloseIosModal = document.getElementById('btn-close-ios-modal');
   const btnOkIosModal = document.getElementById('btn-ok-ios-modal');
+  
   const btnPrivacy = document.getElementById('btn-privacy');
+  const privacyModal = document.getElementById('privacy-modal');
+  const privacyModalPanel = document.getElementById('privacy-modal-panel');
+  const btnClosePrivacyModal = document.getElementById('btn-close-privacy-modal');
+  const btnOkPrivacyModal = document.getElementById('btn-ok-privacy-modal');
 
   const alertModal = document.getElementById('alert-modal');
   const btnCloseAlertModal = document.getElementById('btn-close-alert-modal');
   const btnOkAlertModal = document.getElementById('btn-ok-alert-modal');
 
-  /* --- CIERRES DE MODALES --- */
+  /* --- DETECCIÓN MÓVIL PARA EL WELCOME HINT --- */
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  if (welcomeHintContainer) {
+    if (isMobile) {
+      welcomeHintContainer.innerHTML = `
+        <span class="material-symbols-rounded text-md-primary shrink-0 mt-0.5 text-[22px]">app_shortcut</span>
+        <p class="text-xs text-text-main leading-snug">
+          <strong>Instala la app:</strong> Desde el menú de opciones puedes instalar Pablómetro para mantenerla en tu pantalla de inicio.
+        </p>
+      `;
+    } else {
+      welcomeHintContainer.innerHTML = `
+        <span class="material-symbols-rounded text-md-primary shrink-0 mt-0.5 text-[22px]">desktop_windows</span>
+        <p class="text-xs text-text-main leading-snug">
+          <strong>Aviso sobre PC:</strong> Esta aplicación está optimizada y pensada para dispositivos móviles, pero puedes utilizarla igualmente en tu ordenador sin problema.
+        </p>
+      `;
+    }
+  }
+
+  /* --- GESTIÓN DEL MODAL DE PRIVACIDAD --- */
+  const openPrivacyModal = () => {
+    privacyModal.classList.remove('hidden');
+    privacyModal.classList.add('flex');
+    void privacyModal.offsetWidth;
+    privacyModal.classList.remove('opacity-0');
+    if (privacyModalPanel) privacyModalPanel.classList.remove('scale-95');
+  };
+
+  const closePrivacyModal = () => {
+    privacyModal.classList.add('opacity-0');
+    if (privacyModalPanel) privacyModalPanel.classList.add('scale-95');
+    setTimeout(() => {
+      privacyModal.classList.add('hidden');
+      privacyModal.classList.remove('flex');
+    }, 300);
+  };
+
+  if (btnClosePrivacyModal) btnClosePrivacyModal.addEventListener('click', closePrivacyModal);
+  if (btnOkPrivacyModal) btnOkPrivacyModal.addEventListener('click', closePrivacyModal);
+  if (privacyModal) {
+    privacyModal.addEventListener('click', (e) => {
+      if (e.target === privacyModal) closePrivacyModal();
+    });
+  }
+
+  if (welcomePrivacyLink) {
+    welcomePrivacyLink.addEventListener('click', openPrivacyModal);
+  }
+
+  /* --- CIERRES DE MODALES ADICIONALES --- */
   const closeSearchModal = (volverATiempo = true) => {
     if (!searchModal || searchModal.classList.contains('hidden')) return;
     searchModal.classList.add('hidden');
@@ -1064,7 +1121,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     searchResults.innerHTML = '';
     btnGps.classList.remove('hidden');
     
-    // Si no hay guardado INE y se cancela la búsqueda, regresar al Welcome Modal
     if (!localStorage.getItem('saved_ine')) {
       welcomeModal.classList.remove('hidden');
       welcomeModal.classList.add('flex');
@@ -1231,12 +1287,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.seleccionarMunicipio = (ine) => {
     closeSearchModal(true);
     
-    // Encontrar nombre para Analytics
     const munData = municipiosDB.find(m => m.id_ine === ine);
     const nombreMun = munData ? munData.nombre : ine;
     trackEvent('select_location', { location_id: ine, location_name: nombreMun });
 
-    // Si venía desde el Welcome, ocúltalo por completo y muestra la barra de navegación
     if (welcomeModal && !welcomeModal.classList.contains('hidden')) {
       welcomeModal.classList.add('hidden');
       welcomeModal.classList.remove('flex');
@@ -1329,7 +1383,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     btnPrivacy.addEventListener('click', () => {
       trackEvent('options_menu_click', { button: 'privacy_cookies' });
       closeOptionsModal(true);
-      mostrarToast('Sin cookies de rastreo. Solo guardamos tus ajustes en el dispositivo.', 'verified_user');
+      openPrivacyModal();
     });
   }
 
@@ -1477,7 +1531,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const savedIne = localStorage.getItem('saved_ine');
     
     if (!savedIne) {
-      // Primera visita: Mostrar Welcome Modal y ocultar la barra inferior
       welcomeModal.classList.remove('hidden');
       welcomeModal.classList.add('flex');
       if (bottomNav) {
