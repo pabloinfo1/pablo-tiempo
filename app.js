@@ -211,7 +211,7 @@ function habilitarScrollArrastre(contenedor) {
     if (!isDown) return;
     e.preventDefault();
     const x = e.pageX - contenedor.offsetLeft;
-    const walk = (x - startX) * 2.5; // Velocidad de desplazamiento
+    const walk = (x - startX) * 2.5;
     contenedor.scrollLeft = scrollLeft - walk;
   });
 }
@@ -660,6 +660,87 @@ function renderizarCarrusel(horasArray, titulo = 'Próximas horas', esDiaFuturo 
   });
 }
 
+function renderizarModoLifestyle(actualSincronizado) {
+  const container = document.getElementById('ui-lifestyle-mode');
+  if (!container) return;
+
+  const mode = localStorage.getItem('app_lifestyle_mode');
+  if (!mode || mode === 'none') {
+    container.classList.add('hidden');
+    container.innerHTML = '';
+    return;
+  }
+
+  const actual = actualSincronizado || {};
+  const temp = Number(actual.temperatura) || 20;
+  const probLluvia = parsearProbabilidadPct(actual.prob_precipitacion) || 0;
+  const mmLluvia = parsearPrecipitacionMm(actual.precipitacion_mm) || 0;
+  const viento = Number(actual.viento_kmh) || 0;
+  const racha = Number(actual.rachas_viento) || viento;
+  const nieve = actual.cota_nieve !== null && actual.cota_nieve !== undefined && actual.cota_nieve !== '0';
+
+  let titulo = '';
+  let mensaje = '';
+  let icono = '';
+  let accentColor = ''; 
+
+  if (mode === 'moto') {
+    titulo = 'Modo Moto';
+    icono = 'two_wheeler';
+    
+    if (nieve) {
+      mensaje = 'Posible nieve o hielo. Mejor deja la MT-07 aparcada hoy, no te la juegues.';
+      accentColor = 'bg-red-500/15 border-red-500/40 text-red-600 dark:text-red-400';
+    } else if (probLluvia > 40 || mmLluvia > 0.5) {
+      mensaje = 'Asfalto mojado y lluvia a la vista. Tacto con el gas de la MT-07 y aumenta la distancia.';
+      accentColor = 'bg-blue-500/15 border-blue-500/40 text-blue-600 dark:text-blue-400';
+    } else if (racha > 40) {
+      mensaje = `Viento lateral fuerte (${racha} km/h). Ojo en puentes y adelantamientos con la moto.`;
+      accentColor = 'bg-orange-500/15 border-orange-500/40 text-orange-600 dark:text-orange-400';
+    } else if (temp < 6) {
+      mensaje = `Hace un frío que pela (${temp}°C). Equípate bien y ten cuidado con las placas de hielo en curva.`;
+      accentColor = 'bg-cyan-500/15 border-cyan-500/40 text-cyan-600 dark:text-cyan-400';
+    } else if (temp > 34) {
+      mensaje = `Asfalto hirviendo (${temp}°C). Vigila presiones y no te ases con la chaqueta.`;
+      accentColor = 'bg-orange-500/15 border-orange-500/40 text-orange-600 dark:text-orange-400';
+    } else {
+      mensaje = 'Condiciones espectaculares para arrancar la MT-07 y salir a curvear. ¡Disfruta de la ruta y V\'s!';
+      accentColor = 'bg-green-500/15 border-green-500/40 text-green-600 dark:text-green-400';
+    }
+  } else if (mode === 'botellon') {
+    titulo = 'Modo Botellón';
+    icono = 'local_bar';
+
+    if (probLluvia > 40 || mmLluvia > 0.5) {
+      mensaje = 'Pinta muy feo en la calle. Mejor montad un evento bajo techo estilo Pablo\'s House o se os van a aguar los cubatas.';
+      accentColor = 'bg-blue-500/15 border-blue-500/40 text-blue-600 dark:text-blue-400';
+    } else if (temp < 10) {
+      mensaje = `Rasquita seria (${temp}°C). O llevas buen abrigo a la plaza o tendréis que calentar a base de chupitos.`;
+      accentColor = 'bg-cyan-500/15 border-cyan-500/40 text-cyan-600 dark:text-cyan-400';
+    } else if (racha > 30) {
+      mensaje = `Mucho viento (${racha} km/h). Cuidado en la calle que vuelan los vasos y el hielo.`;
+      accentColor = 'bg-orange-500/15 border-orange-500/40 text-orange-600 dark:text-orange-400';
+    } else if (temp > 28) {
+      mensaje = `Noche tropical (${temp}°C). Bebed rápido que los hielos en la calle os van a durar un suspiro.`;
+      accentColor = 'bg-orange-500/15 border-orange-500/40 text-orange-600 dark:text-orange-400';
+    } else {
+      mensaje = 'Clima perfecto para la plaza. Buen rollo, que rule el hielo y no hagáis mucho ruido.';
+      accentColor = 'bg-green-500/15 border-green-500/40 text-green-600 dark:text-green-400';
+    }
+  }
+
+  container.innerHTML = `
+    <div class="px-4 py-3.5 rounded-2xl border ${accentColor} flex items-start gap-3.5 transition-all shadow-sm">
+      <span class="material-symbols-rounded text-[28px] shrink-0 mt-0.5">${icono}</span>
+      <div class="flex flex-col">
+        <span class="font-bold text-xs tracking-wider uppercase opacity-90">${titulo}</span>
+        <span class="font-medium text-sm mt-0.5 leading-snug">${mensaje}</span>
+      </div>
+    </div>
+  `;
+  container.classList.remove('hidden');
+}
+
 function formatearFechaActualizacion(isoString) {
   const fecha = isoString ? new Date(isoString) : new Date();
   if (isNaN(fecha.getTime())) return '';
@@ -732,6 +813,9 @@ function renderizarUI() {
       alertasDiv.innerHTML = '';
     }
   }
+
+  // Modos Dinámicos de Estilo de Vida
+  renderizarModoLifestyle(actualSincronizado);
 
   // Datos extra configurables por el usuario
   const extraDiv = document.getElementById('ui-datos-extra');
@@ -967,6 +1051,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const advOptionsList = document.getElementById('advanced-options-list');
   const advCheckboxes = document.querySelectorAll('.adv-pref-checkbox');
 
+  const btnModeMoto = document.getElementById('btn-mode-moto');
+  const btnModeBotellon = document.getElementById('btn-mode-botellon');
+
   const pwaInstallSection = document.getElementById('pwa-install-section');
   const btnInstallPwa = document.getElementById('btn-install-pwa');
   const btnShareApp = document.getElementById('btn-share-app');
@@ -1108,7 +1195,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Al volver a la pestaña/app: si los datos tienen más de 30 min, refrescar desde el Worker
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
       const savedIne = localStorage.getItem('saved_ine');
@@ -1342,10 +1428,11 @@ document.addEventListener('DOMContentLoaded', () => {
     trackEvent('options_menu_click', { button: 'aemet_info' });
   });
 
-  /* --- AJUSTES DE TEMA Y COLOR --- */
+  /* --- AJUSTES DE TEMA Y MODOS LIFESTYLE --- */
   const updateSettingsUI = () => {
     const currentTheme = localStorage.getItem('app_theme') || 'system';
     const currentColor = localStorage.getItem('app_color') || 'blue';
+    const currentLifestyleMode = localStorage.getItem('app_lifestyle_mode') || 'none';
 
     themeBtns.forEach(btn => {
       btn.dataset.active = btn.dataset.themeVal === currentTheme ? 'true' : 'false';
@@ -1364,7 +1451,30 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       btn.dataset.active = isActive ? 'true' : 'false';
     });
+
+    if (btnModeMoto) {
+      btnModeMoto.dataset.active = currentLifestyleMode === 'moto' ? 'true' : 'false';
+    }
+    if (btnModeBotellon) {
+      btnModeBotellon.dataset.active = currentLifestyleMode === 'botellon' ? 'true' : 'false';
+    }
   };
+
+  const toggleLifestyleMode = (mode) => {
+    const currentMode = localStorage.getItem('app_lifestyle_mode');
+    if (currentMode === mode) {
+      localStorage.setItem('app_lifestyle_mode', 'none');
+      trackEvent('toggle_lifestyle_mode', { mode: mode, enabled: false });
+    } else {
+      localStorage.setItem('app_lifestyle_mode', mode);
+      trackEvent('toggle_lifestyle_mode', { mode: mode, enabled: true });
+    }
+    updateSettingsUI();
+    if (currentWeatherData) renderizarUI();
+  };
+
+  if (btnModeMoto) btnModeMoto.addEventListener('click', () => toggleLifestyleMode('moto'));
+  if (btnModeBotellon) btnModeBotellon.addEventListener('click', () => toggleLifestyleMode('botellon'));
 
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
     const currentColor = localStorage.getItem('app_color') || 'blue';
@@ -1399,7 +1509,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const savedColorInit = localStorage.getItem('app_color') || 'blue';
     if (savedColorInit.startsWith('#')) colorPicker.value = savedColorInit;
 
-    // Previsualización fluida a 60fps sin saturar Analytics ni localStorage
     colorPicker.addEventListener('input', (e) => {
       const hex = e.target.value;
       document.documentElement.setAttribute('data-color', 'custom');
@@ -1407,7 +1516,6 @@ document.addEventListener('DOMContentLoaded', () => {
       window.applyCustomColor(hex);
     });
 
-    // Guardado y evento Analytics únicamente al soltar el selector
     colorPicker.addEventListener('change', (e) => {
       const hex = e.target.value;
       localStorage.setItem('app_color', hex);
@@ -1488,7 +1596,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       cargarMunicipiosDB();
     } else {
-      // Ejecutar petición meteorológica y carga de municipios simultáneamente
       Promise.all([
         cargarTiempo(savedIne),
         cargarMunicipiosDB()
