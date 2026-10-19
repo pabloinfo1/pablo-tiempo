@@ -6,6 +6,11 @@
   <title>Pablómetro</title>
   <meta name="description" content="El tiempo oficial de la AEMET, pero con buen gusto. Una aplicación meteorológica ultraligera y minimalista.">
   
+  <!-- Preconexiones críticas -->
+  <link rel="preconnect" href="https://aemet-proxy.pabloinfo1.workers.dev" crossorigin>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-437411QLCV"></script>
   <script>
@@ -26,15 +31,19 @@
   
   <!-- Etiquetas Open Graph -->
   <meta property="og:type" content="website">
+  <meta property="og:url" content="https://pabloinfo1.github.io/pablo-tiempo/">
   <meta property="og:title" content="Pablómetro">
   <meta property="og:description" content="El tiempo oficial de la AEMET, pero con buen gusto. Una aplicación meteorológica ultraligera y minimalista.">
-  <meta property="og:image" content="banner-image.svg">
+  <meta property="og:image" content="https://pabloinfo1.github.io/pablo-tiempo/banner-image.svg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://pabloinfo1.github.io/pablo-tiempo/banner-image.svg">
   
+  <!-- Fuentes optimizadas (sin @import bloqueante y con subset de iconos exactos) -->
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0..1,0&icon_names=ac_unit,add_box,air,app_shortcut,arrow_back,check,check_circle,chevron_right,clear_day,clear_night,close,cloud,cloud_off,content_copy,cookie,desktop_windows,error,expand_more,foggy,hourglass_empty,info,install_mobile,ios_share,location_disabled,location_off,location_on,mail,my_location,open_in_new,partly_cloudy_day,partly_cloudy_night,phone_iphone,photo_camera,public,rainy,schedule,search,settings,share,sync,thermostat,thunderstorm,tune,warning,water_drop,wb_sunny,weather_snowy&display=block" rel="stylesheet" />
+
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,1,0" rel="stylesheet" />
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap');
-    
     :root {
       --md-surface: #f8fafc;
       --md-surface-container: #f1f5f9;
