@@ -855,13 +855,20 @@ function renderizarUI() {
 
   renderizarListaDias(data);
 
-  // Mostrar la hora de la última actualización
+  // Mostrar la hora de la última actualización (AEMET API o fallback a hora local)
   const actualizacionEl = document.getElementById('ui-ultima-act');
   if (actualizacionEl) {
-    const ahora = new Date();
-    const hh = String(ahora.getHours()).padStart(2, '0');
-    const mm = String(ahora.getMinutes()).padStart(2, '0');
-    actualizacionEl.textContent = `Última actualización de datos: hoy a las ${hh}:${mm}`;
+    if (data.actualizado_en) {
+      const fechaAemet = new Date(data.actualizado_en);
+      const hh = String(fechaAemet.getHours()).padStart(2, '0');
+      const mm = String(fechaAemet.getMinutes()).padStart(2, '0');
+      actualizacionEl.textContent = `Última actualización (API AEMET): hoy a las ${hh}:${mm}`;
+    } else {
+      const ahora = new Date();
+      const hh = String(ahora.getHours()).padStart(2, '0');
+      const mm = String(ahora.getMinutes()).padStart(2, '0');
+      actualizacionEl.textContent = `Última actualización de datos: hoy a las ${hh}:${mm}`;
+    }
   }
 }
 
@@ -943,7 +950,63 @@ function calcularDistancia(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
+/* --- LÓGICA DE GEOLOCALIZACIÓN REUTILIZABLE --- */
+function ubicarPorGPS(iconoEl, textoEl, callbackOnSuccess = null) {
+  if (!navigator.geolocation) {
+    mostrarToast('Tu navegador no soporta geolocalización', 'location_disabled');
+    return;
+  }
+  if (municipiosCargando || municipiosDB.length === 0) {
+    mostrarToast('Cargando municipios, inténtalo en un segundo...', 'hourglass_empty');
+    return;
+  }
+
+  const textoOriginal = textoEl.textContent;
+  iconoEl.textContent = 'sync';
+  iconoEl.classList.add('animate-spin');
+  textoEl.textContent = 'Buscando tu zona...';
+
+  navigator.geolocation.getCurrentPosition((position) => {
+    let municipioMasCercano = null;
+    let distanciaMinima = Infinity;
+
+    municipiosDB.forEach(m => {
+      if (m.lat && m.lon) {
+        const dist = calcularDistancia(position.coords.latitude, position.coords.longitude, m.lat, m.lon);
+        if (dist < distanciaMinima) {
+          distanciaMinima = dist;
+          municipioMasCercano = m;
+        }
+      }
+    });
+
+    iconoEl.textContent = 'my_location';
+    iconoEl.classList.remove('animate-spin');
+    textoEl.textContent = textoOriginal;
+
+    if (municipioMasCercano) {
+      if (callbackOnSuccess) {
+        callbackOnSuccess(municipioMasCercano.id_ine);
+      } else {
+        seleccionarMunicipio(municipioMasCercano.id_ine);
+      }
+    }
+  }, () => {
+    mostrarToast('Activa el permiso de ubicación en tu navegador', 'location_off');
+    iconoEl.textContent = 'my_location';
+    iconoEl.classList.remove('animate-spin');
+    textoEl.textContent = textoOriginal;
+  });
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
+  const bottomNav = document.getElementById('bottom-nav');
+  const welcomeModal = document.getElementById('welcome-modal');
+  const btnWelcomeGps = document.getElementById('btn-welcome-gps');
+  const btnWelcomeSearch = document.getElementById('btn-welcome-search');
+  const iconoWelcomeGps = document.getElementById('icono-welcome-gps');
+  const textoWelcomeGps = document.getElementById('texto-welcome-gps');
+
   const btnTiempo = document.getElementById('btn-tiempo');
   const btnVolverHoy = document.getElementById('btn-volver-hoy');
   const btnSearch = document.getElementById('btn-search');
@@ -991,7 +1054,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     searchInput.value = '';
     searchResults.innerHTML = '';
     btnGps.classList.remove('hidden');
-    if (volverATiempo) actualizarBarraNavegacion('tiempo');
+    
+    // Si no hay guardado INE y se cancela la búsqueda, regresar al Welcome Modal
+    if (!localStorage.getItem('saved_ine')) {
+      welcomeModal.classList.remove('hidden');
+      welcomeModal.classList.add('flex');
+    } else {
+      if (volverATiempo) actualizarBarraNavegacion('tiempo');
+    }
   };
 
   const closeOptionsModal = (volverATiempo = true) => {
@@ -1051,7 +1121,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  /* --- BUSCADOR --- */
+  /* --- BUSCADOR Y BIENVENIDA --- */
+  if (btnWelcomeSearch) {
+    btnWelcomeSearch.addEventListener('click', () => {
+      welcomeModal.classList.add('hidden');
+      welcomeModal.classList.remove('flex');
+      
+      searchModal.classList.remove('hidden');
+      searchModal.classList.add('flex');
+      searchInput.focus();
+      if (municipiosCargando) {
+        searchResults.innerHTML = `<div class="p-6 text-center text-text-muted text-sm">Preparando lista de municipios...</div>`;
+      }
+    });
+  }
+
+  if (btnWelcomeGps) {
+    btnWelcomeGps.addEventListener('click', () => {
+      ubicarPorGPS(iconoWelcomeGps, textoWelcomeGps);
+    });
+  }
+
   const renderizarResultadosBusqueda = (queryRaw) => {
     const query = normalizarTexto(queryRaw);
     if (query.length > 0) {
@@ -1114,47 +1204,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (btnCloseSearch) btnCloseSearch.addEventListener('click', () => closeSearchModal(true));
 
   if (btnGps) {
-    btnGps.addEventListener('click', () => {
-      if (!navigator.geolocation) {
-        mostrarToast('Tu navegador no soporta geolocalización', 'location_disabled');
-        return;
-      }
-      if (municipiosCargando || municipiosDB.length === 0) {
-        mostrarToast('Cargando municipios, inténtalo en un segundo...', 'hourglass_empty');
-        return;
-      }
-
-      iconoGps.textContent = 'sync';
-      iconoGps.classList.add('animate-spin');
-      textoGps.textContent = 'Buscando tu zona...';
-
-      navigator.geolocation.getCurrentPosition((position) => {
-        let municipioMasCercano = null;
-        let distanciaMinima = Infinity;
-
-        municipiosDB.forEach(m => {
-          if (m.lat && m.lon) {
-            const dist = calcularDistancia(position.coords.latitude, position.coords.longitude, m.lat, m.lon);
-            if (dist < distanciaMinima) {
-              distanciaMinima = dist;
-              municipioMasCercano = m;
-            }
-          }
-        });
-
-        iconoGps.textContent = 'my_location';
-        iconoGps.classList.remove('animate-spin');
-        textoGps.textContent = 'Usar mi ubicación actual';
-
-        if (municipioMasCercano) seleccionarMunicipio(municipioMasCercano.id_ine);
-
-      }, () => {
-        mostrarToast('Activa el permiso de ubicación en tu navegador', 'location_off');
-        iconoGps.textContent = 'my_location';
-        iconoGps.classList.remove('animate-spin');
-        textoGps.textContent = 'Usar mi ubicación actual';
-      });
-    });
+    btnGps.addEventListener('click', () => ubicarPorGPS(iconoGps, textoGps));
   }
 
   if (searchInput) {
@@ -1163,6 +1213,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   window.seleccionarMunicipio = (ine) => {
     closeSearchModal(true);
+    
+    // Si venía desde el Welcome, ocúltalo por completo y muestra la barra de navegación
+    if (welcomeModal && !welcomeModal.classList.contains('hidden')) {
+      welcomeModal.classList.add('hidden');
+      welcomeModal.classList.remove('flex');
+      if (bottomNav) {
+        bottomNav.classList.remove('hidden');
+        bottomNav.classList.add('flex');
+      }
+    }
+    
     document.getElementById('ui-municipio').textContent = "Cargando...";
     cargarTiempo(ine);
   };
@@ -1339,8 +1400,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   actualizarBarraNavegacion('tiempo');
 
   /* --- CARGA INICIAL --- */
-  const savedIne = localStorage.getItem('saved_ine') || '07054';
-
   const cargarMunicipiosDB = async () => {
     try {
       const res = await fetch('municipios.json');
@@ -1357,7 +1416,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             _provNorm: normalizarTexto(provLimpia)
           };
         });
-        // Si los datos del tiempo cargaron antes que municipios.json, refrescar el título con el nombre limpio
         if (currentWeatherData) {
           document.getElementById('ui-municipio').textContent = obtenerNombreMunicipioLimpio(currentWeatherData);
         }
@@ -1373,8 +1431,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   };
 
-  await Promise.all([
-    cargarMunicipiosDB(),
-    cargarTiempo(savedIne)
-  ]);
+  const iniciarApp = async () => {
+    await cargarMunicipiosDB();
+    const savedIne = localStorage.getItem('saved_ine');
+    
+    if (!savedIne) {
+      // Primera visita: Mostrar Welcome Modal y ocultar la barra inferior
+      welcomeModal.classList.remove('hidden');
+      welcomeModal.classList.add('flex');
+      if (bottomNav) {
+        bottomNav.classList.add('hidden');
+        bottomNav.classList.remove('flex');
+      }
+    } else {
+      await cargarTiempo(savedIne);
+    }
+  };
+
+  iniciarApp();
 });
