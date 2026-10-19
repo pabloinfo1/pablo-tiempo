@@ -682,30 +682,23 @@ function renderizarModoLifestyle(actualSincronizado) {
   let titulo = '';
   let mensaje = '';
   let icono = '';
-  let accentColor = ''; 
 
   if (mode === 'moto') {
     titulo = 'Modo Moto';
     icono = 'two_wheeler';
     
     if (nieve) {
-      mensaje = 'Posible nieve o hielo. Mejor deja la MT-07 aparcada hoy, no te la juegues.';
-      accentColor = 'bg-red-500/15 border-red-500/40 text-red-600 dark:text-red-400';
+      mensaje = 'Posible nieve o hielo. Mejor deja la moto aparcada hoy, no te la juegues.';
     } else if (probLluvia > 40 || mmLluvia > 0.5) {
-      mensaje = 'Asfalto mojado y lluvia a la vista. Tacto con el gas de la MT-07 y aumenta la distancia.';
-      accentColor = 'bg-blue-500/15 border-blue-500/40 text-blue-600 dark:text-blue-400';
+      mensaje = 'Asfalto mojado y lluvia a la vista. Tacto con el gas y aumenta la distancia de seguridad.';
     } else if (racha > 40) {
       mensaje = `Viento lateral fuerte (${racha} km/h). Ojo en puentes y adelantamientos con la moto.`;
-      accentColor = 'bg-orange-500/15 border-orange-500/40 text-orange-600 dark:text-orange-400';
     } else if (temp < 6) {
       mensaje = `Hace un frío que pela (${temp}°C). Equípate bien y ten cuidado con las placas de hielo en curva.`;
-      accentColor = 'bg-cyan-500/15 border-cyan-500/40 text-cyan-600 dark:text-cyan-400';
     } else if (temp > 34) {
       mensaje = `Asfalto hirviendo (${temp}°C). Vigila presiones y no te ases con la chaqueta.`;
-      accentColor = 'bg-orange-500/15 border-orange-500/40 text-orange-600 dark:text-orange-400';
     } else {
-      mensaje = 'Condiciones espectaculares para arrancar la MT-07 y salir a curvear. ¡Disfruta de la ruta y V\'s!';
-      accentColor = 'bg-green-500/15 border-green-500/40 text-green-600 dark:text-green-400';
+      mensaje = 'Condiciones espectaculares para arrancar la moto y salir a curvear. ¡Disfruta de la ruta y V\'s!';
     }
   } else if (mode === 'botellon') {
     titulo = 'Modo Botellón';
@@ -713,28 +706,23 @@ function renderizarModoLifestyle(actualSincronizado) {
 
     if (probLluvia > 40 || mmLluvia > 0.5) {
       mensaje = 'Pinta muy feo en la calle. Mejor montad un evento bajo techo estilo Pablo\'s House o se os van a aguar los cubatas.';
-      accentColor = 'bg-blue-500/15 border-blue-500/40 text-blue-600 dark:text-blue-400';
     } else if (temp < 10) {
       mensaje = `Rasquita seria (${temp}°C). O llevas buen abrigo a la plaza o tendréis que calentar a base de chupitos.`;
-      accentColor = 'bg-cyan-500/15 border-cyan-500/40 text-cyan-600 dark:text-cyan-400';
     } else if (racha > 30) {
       mensaje = `Mucho viento (${racha} km/h). Cuidado en la calle que vuelan los vasos y el hielo.`;
-      accentColor = 'bg-orange-500/15 border-orange-500/40 text-orange-600 dark:text-orange-400';
     } else if (temp > 28) {
       mensaje = `Noche tropical (${temp}°C). Bebed rápido que los hielos en la calle os van a durar un suspiro.`;
-      accentColor = 'bg-orange-500/15 border-orange-500/40 text-orange-600 dark:text-orange-400';
     } else {
       mensaje = 'Clima perfecto para la plaza. Buen rollo, que rule el hielo y no hagáis mucho ruido.';
-      accentColor = 'bg-green-500/15 border-green-500/40 text-green-600 dark:text-green-400';
     }
   }
 
   container.innerHTML = `
-    <div class="px-4 py-3.5 rounded-2xl border ${accentColor} flex items-start gap-3.5 transition-all shadow-sm">
-      <span class="material-symbols-rounded text-[28px] shrink-0 mt-0.5">${icono}</span>
+    <div class="px-4 py-3.5 rounded-2xl border border-md-primary/30 bg-md-primary/10 flex items-start gap-3.5 transition-all shadow-sm">
+      <span class="material-symbols-rounded text-[28px] text-md-primary shrink-0 mt-0.5">${icono}</span>
       <div class="flex flex-col">
-        <span class="font-bold text-xs tracking-wider uppercase opacity-90">${titulo}</span>
-        <span class="font-medium text-sm mt-0.5 leading-snug">${mensaje}</span>
+        <span class="font-bold text-xs tracking-wider uppercase text-md-primary opacity-90">${titulo}</span>
+        <span class="font-medium text-sm mt-0.5 leading-snug text-text-main">${mensaje}</span>
       </div>
     </div>
   `;
@@ -829,12 +817,12 @@ function renderizarUI() {
     const tarjetasExtra = [];
 
     const crearChipExtra = (icono, etiqueta, valor) => `
-      <div class="flex items-center gap-2.5 bg-md-surface/75 px-3.5 py-2.5 rounded-2xl border border-border-color/60 flex-1 min-w-[138px] max-w-[210px]">
-        <span class="material-symbols-rounded text-[20px] text-md-primary shrink-0">${escaparHTML(icono)}</span>
-        <div class="flex flex-col min-w-0">
+      <div class="flex flex-col items-center justify-center gap-1.5 bg-md-surface/75 px-3 py-2.5 rounded-2xl border border-border-color/60 w-[calc(50%-5px)] sm:w-[140px] text-center">
+        <div class="flex items-center gap-1.5">
+          <span class="material-symbols-rounded text-[18px] text-md-primary shrink-0">${escaparHTML(icono)}</span>
           <span class="text-[10px] font-semibold uppercase tracking-wider text-text-muted leading-none truncate">${escaparHTML(etiqueta)}</span>
-          <span class="text-sm font-semibold text-text-main leading-tight mt-1 truncate">${escaparHTML(valor)}</span>
         </div>
+        <span class="text-[13px] font-semibold text-text-main leading-tight truncate w-full">${escaparHTML(valor)}</span>
       </div>
     `;
 
