@@ -6,6 +6,16 @@
   <title>Pablómetro</title>
   <meta name="description" content="El tiempo oficial de la AEMET, pero con buen gusto. Una aplicación meteorológica ultraligera y minimalista.">
   
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-437411QLCV"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-437411QLCV');
+  </script>
+  
   <!-- Metadatos PWA & iOS -->
   <meta name="theme-color" content="#0f172a">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -303,6 +313,11 @@
             <span>Buscar municipio...</span>
           </button>
         </div>
+        
+        <!-- Aviso de condiciones requerido -->
+        <p class="text-[11px] text-text-muted mt-5 text-center px-2">
+          Al elegir una opción y continuar, aceptas las condiciones de uso y privacidad de la web.
+        </p>
       </div>
     </div>
   </div>
@@ -518,11 +533,11 @@
         <p class="text-sm font-medium text-text-muted mb-3">AVISOS Y CONTACTO</p>
         <div class="flex flex-col gap-3">
           <div class="flex gap-3">
-            <a href="mailto:pabloinfo1@gmail.com" class="flex-1 py-3 bg-md-surface-container-high hover:bg-md-surface-container transition rounded-2xl flex items-center justify-center gap-2 text-text-main font-medium">
+            <a href="mailto:pabloinfo1@gmail.com" id="btn-contact-email" class="flex-1 py-3 bg-md-surface-container-high hover:bg-md-surface-container transition rounded-2xl flex items-center justify-center gap-2 text-text-main font-medium">
               <span class="material-symbols-rounded text-md-primary">mail</span>
               Contactar
             </a>
-            <a href="https://www.instagram.com/pabloinfo1/" target="_blank" rel="noopener noreferrer" class="flex-1 py-3 bg-md-surface-container-high hover:bg-md-surface-container transition rounded-2xl flex items-center justify-center gap-2 text-text-main font-medium">
+            <a href="https://www.instagram.com/pabloinfo1/" id="btn-instagram" target="_blank" rel="noopener noreferrer" class="flex-1 py-3 bg-md-surface-container-high hover:bg-md-surface-container transition rounded-2xl flex items-center justify-center gap-2 text-text-main font-medium">
               <span class="material-symbols-rounded text-md-primary">photo_camera</span>
               Instagram
             </a>
@@ -533,7 +548,7 @@
             Privacidad y cookies
           </button>
           
-          <a href="https://www.aemet.es" target="_blank" rel="noopener noreferrer" class="w-full py-3 bg-md-surface-container-high hover:bg-md-surface-container transition rounded-2xl flex items-center justify-center gap-2 text-text-main font-medium">
+          <a href="https://www.aemet.es" id="btn-aemet-link" target="_blank" rel="noopener noreferrer" class="w-full py-3 bg-md-surface-container-high hover:bg-md-surface-container transition rounded-2xl flex items-center justify-center gap-2 text-text-main font-medium">
             <span class="material-symbols-rounded text-md-primary">public</span>
             Datos obtenidos de AEMET
           </a>
