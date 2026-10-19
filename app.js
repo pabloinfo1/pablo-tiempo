@@ -28,10 +28,6 @@ function cargarPreferenciasAvanzadas() {
 let advPrefs = cargarPreferenciasAvanzadas();
 
 /* --- UTILIDADES Y REPARACIÓN DE CODIFICACIÓN (MOJIBAKE iOS/AEMET) --- */
-/**
- * Repara cadenas UTF-8 que fueron leídas erróneamente como ISO-8859-1 / Windows-1252
- * (ej. "Santa EulÃ ria des Riu" -> "Santa Eulària des Riu").
- */
 function repararTextoMojibake(str) {
   if (typeof str !== 'string') return str;
   if (!/[ÃÂâ]/.test(str)) return str;
@@ -89,9 +85,6 @@ function primerValorDefinido(...valores) {
   return undefined;
 }
 
-/**
- * Parsea la precipitación acumulada en mm (l/m²) sin confundirla nunca con porcentaje.
- */
 function parsearPrecipitacionMm(valorRaw) {
   if (valorRaw === undefined || valorRaw === null || valorRaw === '') return 0;
   const str = String(valorRaw).trim().toLowerCase();
@@ -100,9 +93,6 @@ function parsearPrecipitacionMm(valorRaw) {
   return (!isNaN(num) && num > 0) ? num : 0;
 }
 
-/**
- * Parsea estrictamente la probabilidad de precipitación en % (0 - 100).
- */
 function parsearProbabilidadPct(valorRaw) {
   if (valorRaw === undefined || valorRaw === null || valorRaw === '') return null;
   const num = parseInt(String(valorRaw).trim(), 10);
@@ -864,6 +854,15 @@ function renderizarUI() {
   }
 
   renderizarListaDias(data);
+
+  // Mostrar la hora de la última actualización
+  const actualizacionEl = document.getElementById('ui-ultima-act');
+  if (actualizacionEl) {
+    const ahora = new Date();
+    const hh = String(ahora.getHours()).padStart(2, '0');
+    const mm = String(ahora.getMinutes()).padStart(2, '0');
+    actualizacionEl.textContent = `Última actualización de datos: hoy a las ${hh}:${mm}`;
+  }
 }
 
 function renderizarListaDias(data) {
