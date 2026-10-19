@@ -254,12 +254,12 @@
     <section id="ui-lista-dias" class="bg-md-surface-container rounded-md-card overflow-hidden mb-6">
     </section>
 
-    <!-- Última actualización añadida aquí -->
+    <!-- Última actualización -->
     <p id="ui-ultima-act" class="text-center text-xs text-text-muted mt-2 mb-6 font-medium"></p>
   </main>
 
-  <!-- Barra de navegación inferior: solo muestra texto en la pestaña activa -->
-  <nav class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-md-surface/85 backdrop-blur-lg shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-border-color rounded-full p-1.5 flex items-center justify-between gap-1 z-40">
+  <!-- Barra de navegación inferior -->
+  <nav id="bottom-nav" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-md-surface/85 backdrop-blur-lg shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-border-color rounded-full p-1.5 flex items-center justify-between gap-1 z-40 transition-opacity">
     <button id="btn-tiempo" class="nav-btn flex items-center justify-center gap-2 px-5 py-2.5 bg-md-surface-container-high rounded-full transition-all duration-200 text-md-primary">
       <span class="nav-icon material-symbols-rounded text-[22px]" style="font-variation-settings: 'FILL' 1;">partly_cloudy_day</span>
       <span class="nav-label text-sm font-semibold">Tiempo</span>
@@ -273,6 +273,39 @@
       <span class="nav-label text-sm font-semibold hidden">Opciones</span>
     </button>
   </nav>
+
+  <!-- Modal Bienvenida (Primer acceso) -->
+  <div id="welcome-modal" class="fixed inset-0 z-[100] hidden items-center justify-center p-4 bg-md-surface backdrop-blur-md transition-opacity">
+    <div class="bg-md-surface border border-border-color rounded-3xl p-6 md:p-8 max-w-sm w-full shadow-2xl flex flex-col items-center text-center gap-6">
+      <img src="favicon.png" alt="Pablómetro Logo" class="w-20 h-20 rounded-2xl shadow-sm -mt-2">
+      
+      <div>
+        <h2 class="text-2xl font-bold text-text-main mb-2">¡Bienvenido a Pablómetro!</h2>
+        <p class="text-sm text-text-muted leading-relaxed">El tiempo oficial de la AEMET, pero con buen gusto.</p>
+      </div>
+      
+      <div class="bg-md-primary/10 border border-md-primary/20 rounded-2xl p-3.5 w-full flex items-start gap-3 text-left">
+        <span class="material-symbols-rounded text-md-primary shrink-0 mt-0.5 text-[22px]">desktop_windows</span>
+        <p class="text-xs text-text-main leading-snug">
+          <strong>Aviso sobre PC:</strong> Esta aplicación está optimizada y pensada para dispositivos móviles, pero puedes utilizarla igualmente en tu ordenador sin problema.
+        </p>
+      </div>
+
+      <div class="w-full text-left">
+        <p class="text-sm font-semibold text-text-main mb-3">Para empezar, ¿qué ubicación deseas consultar?</p>
+        <div class="flex flex-col gap-2.5">
+          <button id="btn-welcome-gps" class="w-full py-3.5 px-4 bg-md-primary text-white rounded-2xl flex items-center justify-center gap-2.5 font-semibold active:scale-[0.98] transition shadow-md">
+            <span class="material-symbols-rounded" id="icono-welcome-gps">my_location</span>
+            <span id="texto-welcome-gps">Usar mi ubicación actual</span>
+          </button>
+          <button id="btn-welcome-search" class="w-full py-3.5 px-4 bg-md-surface-container-high hover:bg-md-surface-container transition rounded-2xl flex items-center justify-center gap-2.5 text-text-main font-semibold border border-border-color">
+            <span class="material-symbols-rounded text-md-primary">search</span>
+            <span>Buscar municipio...</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Modal grande superpuesto para Avisos Meteorológicos -->
   <div id="alert-modal" class="fixed inset-0 z-[65] hidden items-center justify-center p-4 bg-black/60 backdrop-blur-sm opacity-0 transition-opacity duration-300">
@@ -320,7 +353,7 @@
   </div>
 
   <!-- Modal del buscador -->
-  <div id="search-modal" class="fixed inset-0 bg-md-surface z-50 hidden flex-col transition-opacity">
+  <div id="search-modal" class="fixed inset-0 bg-md-surface z-[110] hidden flex-col transition-opacity">
     <div class="p-4 flex gap-3 items-center border-b border-border-color bg-md-surface">
       <button id="btn-close-search" class="p-2 rounded-full hover:bg-md-surface-container transition flex items-center justify-center">
         <span class="material-symbols-rounded text-text-muted">arrow_back</span>
