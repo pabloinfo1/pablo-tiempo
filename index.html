@@ -294,11 +294,8 @@
         <p class="text-sm text-text-muted leading-relaxed">El tiempo oficial de la AEMET, pero con buen gusto.</p>
       </div>
       
-      <div class="bg-md-primary/10 border border-md-primary/20 rounded-2xl p-3.5 w-full flex items-start gap-3 text-left">
-        <span class="material-symbols-rounded text-md-primary shrink-0 mt-0.5 text-[22px]">desktop_windows</span>
-        <p class="text-xs text-text-main leading-snug">
-          <strong>Aviso sobre PC:</strong> Esta aplicación está optimizada y pensada para dispositivos móviles, pero puedes utilizarla igualmente en tu ordenador sin problema.
-        </p>
+      <!-- Contenedor del aviso dinámico (PC o Móvil) -->
+      <div id="welcome-hint-container" class="bg-md-primary/10 border border-md-primary/20 rounded-2xl p-3.5 w-full flex items-start gap-3 text-left">
       </div>
 
       <div class="w-full text-left">
@@ -314,11 +311,35 @@
           </button>
         </div>
         
-        <!-- Aviso de condiciones requerido -->
-        <p class="text-[11px] text-text-muted mt-5 text-center px-2">
+        <!-- Aviso de condiciones requerido con enlace invisible -->
+        <p id="welcome-privacy-link" class="text-[11px] text-text-muted mt-5 text-center px-2 cursor-pointer">
           Al elegir una opción y continuar, aceptas las condiciones de uso y privacidad de la web.
         </p>
       </div>
+    </div>
+  </div>
+
+  <!-- Modal de Privacidad y Cookies -->
+  <div id="privacy-modal" class="fixed inset-0 z-[120] hidden items-center justify-center p-4 bg-black/60 backdrop-blur-sm opacity-0 transition-opacity duration-300">
+    <div id="privacy-modal-panel" class="bg-md-surface border border-border-color rounded-3xl p-6 max-w-sm w-full shadow-2xl flex flex-col gap-5 transform scale-95 transition-transform duration-300 max-h-[85vh] overflow-y-auto no-scrollbar">
+      <div class="flex justify-between items-center -mt-1">
+        <div class="flex items-center gap-2.5">
+          <span class="material-symbols-rounded text-md-primary text-[24px]">cookie</span>
+          <h4 class="text-lg font-bold text-text-main">Privacidad</h4>
+        </div>
+        <button id="btn-close-privacy-modal" class="p-1.5 -mr-1.5 rounded-full hover:bg-md-surface-container text-text-muted flex items-center justify-center transition">
+          <span class="material-symbols-rounded">close</span>
+        </button>
+      </div>
+      
+      <div class="text-[13px] text-text-main leading-relaxed flex flex-col gap-3 font-medium">
+        <p>En Pablómetro priorizamos tu privacidad: no almacenamos datos personales identificables y tus preferencias (como la localidad guardada o el tema visual) se guardan únicamente de forma local en tu propio dispositivo.</p>
+        <p>Para entender el uso general de la aplicación y seguir mejorándola, utilizamos Google Analytics (GA4). Este servicio recopila información anónima sobre interacciones básicas (por ejemplo, qué opciones se consultan con más frecuencia o el tipo de dispositivo utilizado), sin cruzar estos datos con tu identidad personal ni emplear perfiles publicitarios.</p>
+      </div>
+
+      <button id="btn-ok-privacy-modal" class="w-full py-3.5 bg-md-primary text-white font-semibold rounded-2xl mt-1 active:scale-[0.98] transition">
+        Entendido
+      </button>
     </div>
   </div>
 
