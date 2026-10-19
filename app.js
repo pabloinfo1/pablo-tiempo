@@ -244,7 +244,7 @@ function actualizarBarraNavegacion(seccionActiva = 'tiempo') {
   });
 }
 
-/* --- CONFIGURACIÓN PWA --- */
+/* --- CONFIGURACIÓN PWA Y ESTADO DE RED --- */
 function inicializarPWA() {
   const baseUrl = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, '/');
   const iconUrl = new URL('favicon.png', baseUrl).href;
@@ -272,6 +272,14 @@ function inicializarPWA() {
   link.href = 'data:application/manifest+json;charset=utf-8,' + encodeURIComponent(JSON.stringify(manifest));
   document.head.appendChild(link);
 
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch((err) => {
+        console.warn('Error al registrar Service Worker:', err);
+      });
+    });
+  }
+
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredInstallPrompt = e;
@@ -285,7 +293,28 @@ function inicializarPWA() {
   });
 }
 
+function actualizarEstadoRed() {
+  const banner = document.getElementById('offline-banner');
+  const content = document.getElementById('weather-content');
+  if (!navigator.onLine) {
+    banner?.classList.remove('hidden');
+    banner?.classList.add('flex');
+    content?.classList.add('opacity-70', 'saturate-50');
+  } else {
+    banner?.classList.add('hidden');
+    banner?.classList.remove('flex');
+    content?.classList.remove('opacity-70', 'saturate-50');
+    if (localStorage.getItem('saved_ine') && !currentWeatherData) {
+      cargarTiempo(localStorage.getItem('saved_ine'));
+    }
+  }
+}
+
+window.addEventListener('online', actualizarEstadoRed);
+window.addEventListener('offline', actualizarEstadoRed);
+
 inicializarPWA();
+actualizarEstadoRed();
 
 /* --- PROCESAMIENTO Y SINCRONIZACIÓN HORARIA --- */
 function agruparHorasPorSaltosDeDia(horasTotales) {
@@ -533,26 +562,48 @@ function cerrarModalAlerta() {
   }, 300);
 }
 
-/* --- LÓGICA METEOROLÓGICA --- */
+/* --- LÓGICA METEOROLÓGICA CON SWR (STALE-WHILE-REVALIDATE) --- */
 async function cargarTiempo(ine, silencioso = false) {
-  if (!silencioso) setEstadoCarga(true);
+  const cacheKey = `cached_weather_${ine}`;
+  const cachedDataRaw = localStorage.getItem(cacheKey);
+  let mostrarCarga = !silencioso;
+
+  if (cachedDataRaw && !silencioso) {
+    try {
+      currentWeatherData = JSON.parse(cachedDataRaw);
+      diaSeleccionadoIndex = null;
+      renderizarUI();
+      mostrarCarga = false; // Se omite la carga bloqueante porque la UI ya responde
+    } catch (e) {
+      console.warn("Caché corrupta eliminada.");
+      localStorage.removeItem(cacheKey);
+    }
+  }
+
+  if (mostrarCarga) setEstadoCarga(true);
+
   try {
     const res = await fetch(`${WORKER_URL}?ine=${encodeURIComponent(ine)}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    currentWeatherData = await res.json();
-    lastFetchTimestamp = Date.now();
-    if (!silencioso) diaSeleccionadoIndex = null;
+    const newData = await res.json();
 
-    localStorage.setItem('saved_ine', ine);
-    renderizarUI();
+    if (newData && newData.actual) {
+      currentWeatherData = newData;
+      lastFetchTimestamp = Date.now();
+      localStorage.setItem(cacheKey, JSON.stringify(newData));
+      localStorage.setItem('saved_ine', ine);
+      
+      if (!silencioso) diaSeleccionadoIndex = null;
+      renderizarUI();
+    }
   } catch (error) {
-    console.error('Fallo al cargar el tiempo:', error);
+    console.error('Fallo al cargar el tiempo desde red:', error);
     if (!currentWeatherData) {
       document.getElementById('ui-municipio').textContent = 'Error de conexión';
     }
-    mostrarToast('No se pudo conectar con el servidor meteorológico', 'cloud_off');
+    mostrarToast('Mostrando datos sin conexión guardados', 'wifi_off');
   } finally {
-    if (!silencioso) setEstadoCarga(false);
+    if (mostrarCarga) setEstadoCarga(false);
   }
 }
 
@@ -1183,6 +1234,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Refrescar al volver a la app si han pasado más de 30 minutos (SWR en la vuelta)
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
       const savedIne = localStorage.getItem('saved_ine');
@@ -1194,7 +1246,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  /* --- BUSCADOR Y BIENVENIDA --- */
+  /* --- BUSCADOR CON DEBOUNCE --- */
   if (btnWelcomeSearch) {
     btnWelcomeSearch.addEventListener('click', () => {
       welcomeModal.classList.add('hidden');
@@ -1297,8 +1349,15 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Patrón Debounce para la entrada del teclado en el buscador
+  let debounceTimer;
   if (searchInput) {
-    searchInput.addEventListener('input', (e) => renderizarResultadosBusqueda(e.target.value));
+    searchInput.addEventListener('input', (e) => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        renderizarResultadosBusqueda(e.target.value);
+      }, 300);
+    });
   }
 
   window.seleccionarMunicipio = (ine) => {
@@ -1539,7 +1598,7 @@ document.addEventListener('DOMContentLoaded', () => {
   updateSettingsUI();
   actualizarBarraNavegacion('tiempo');
 
-  /* --- CARGA INICIAL EN PARALELO --- */
+  /* --- CARGA INICIAL CON SWR EN PARALELO --- */
   const cargarMunicipiosDB = async () => {
     try {
       const res = await fetch('municipios.json');
@@ -1584,6 +1643,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       cargarMunicipiosDB();
     } else {
+      // Cargar tiempo activará la lógica Stale-While-Revalidate si hay caché disponible
       Promise.all([
         cargarTiempo(savedIne),
         cargarMunicipiosDB()
