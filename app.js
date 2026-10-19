@@ -13,6 +13,15 @@ const DEFAULT_ADV_PREFS = {
   viento: false
 };
 
+/* --- FUNCIÓN DE RASTREO (ANALYTICS) --- */
+function trackEvent(eventName, eventParams = {}) {
+  if (typeof window.gtag === 'function') {
+    window.gtag('event', eventName, eventParams);
+  } else {
+    console.warn('Analytics no está cargado. Evento:', eventName, eventParams);
+  }
+}
+
 function cargarPreferenciasAvanzadas() {
   try {
     const guardadas = JSON.parse(localStorage.getItem('app_advanced_prefs'));
@@ -1138,7 +1147,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (btnWelcomeGps) {
     btnWelcomeGps.addEventListener('click', () => {
-      ubicarPorGPS(iconoWelcomeGps, textoWelcomeGps);
+      ubicarPorGPS(iconoWelcomeGps, textoWelcomeGps, (ine) => {
+        trackEvent('use_gps', { location_id: ine });
+        seleccionarMunicipio(ine);
+      });
     });
   }
 
@@ -1204,7 +1216,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (btnCloseSearch) btnCloseSearch.addEventListener('click', () => closeSearchModal(true));
 
   if (btnGps) {
-    btnGps.addEventListener('click', () => ubicarPorGPS(iconoGps, textoGps));
+    btnGps.addEventListener('click', () => {
+      ubicarPorGPS(iconoGps, textoGps, (ine) => {
+        trackEvent('use_gps', { location_id: ine });
+        seleccionarMunicipio(ine);
+      });
+    });
   }
 
   if (searchInput) {
@@ -1214,6 +1231,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.seleccionarMunicipio = (ine) => {
     closeSearchModal(true);
     
+    // Encontrar nombre para Analytics
+    const munData = municipiosDB.find(m => m.id_ine === ine);
+    const nombreMun = munData ? munData.nombre : ine;
+    trackEvent('select_location', { location_id: ine, location_name: nombreMun });
+
     // Si venía desde el Welcome, ocúltalo por completo y muestra la barra de navegación
     if (welcomeModal && !welcomeModal.classList.contains('hidden')) {
       welcomeModal.classList.add('hidden');
@@ -1247,8 +1269,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
   if (isStandalone && pwaInstallSection) pwaInstallSection.classList.add('hidden');
 
+  /* RASTREO EN ELEMENTOS DEL MENÚ DE OPCIONES */
   if (btnInstallPwa) {
     btnInstallPwa.addEventListener('click', async () => {
+      trackEvent('options_menu_click', { button: 'install_pwa' });
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
       if (isIOS) {
         closeOptionsModal(true);
@@ -1269,9 +1293,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // Botón de Compartir nativo
   if (btnShareApp) {
     btnShareApp.addEventListener('click', async () => {
+      trackEvent('options_menu_click', { button: 'share_app' });
       const shareData = {
         title: 'Pablómetro',
         text: 'El tiempo oficial de la AEMET, pero con buen gusto.',
@@ -1303,10 +1327,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (btnPrivacy) {
     btnPrivacy.addEventListener('click', () => {
+      trackEvent('options_menu_click', { button: 'privacy_cookies' });
       closeOptionsModal(true);
       mostrarToast('Sin cookies de rastreo. Solo guardamos tus ajustes en el dispositivo.', 'verified_user');
     });
   }
+
+  document.getElementById('btn-contact-email')?.addEventListener('click', () => {
+    trackEvent('options_menu_click', { button: 'contact_email' });
+  });
+
+  document.getElementById('btn-instagram')?.addEventListener('click', () => {
+    trackEvent('options_menu_click', { button: 'instagram' });
+  });
+
+  document.getElementById('btn-aemet-link')?.addEventListener('click', () => {
+    trackEvent('options_menu_click', { button: 'aemet_info' });
+  });
 
   /* --- AJUSTES DE TEMA Y COLOR --- */
   const updateSettingsUI = () => {
@@ -1341,6 +1378,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     btn.addEventListener('click', (e) => {
       const val = e.currentTarget.dataset.themeVal;
       localStorage.setItem('app_theme', val);
+      trackEvent('change_theme', { theme: val });
       if (val === 'system') document.documentElement.removeAttribute('data-theme');
       else document.documentElement.setAttribute('data-theme', val);
       updateSettingsUI();
@@ -1352,6 +1390,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       btn.addEventListener('click', (e) => {
         const val = e.currentTarget.dataset.colorVal;
         localStorage.setItem('app_color', val);
+        trackEvent('change_color', { color: val });
         document.documentElement.setAttribute('data-color', val);
         document.documentElement.style.removeProperty('--md-primary');
         updateSettingsUI();
@@ -1366,6 +1405,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const aplicarColorPersonalizado = (e) => {
       const hex = e.target.value;
       localStorage.setItem('app_color', hex);
+      trackEvent('change_color', { color: 'custom', hex_value: hex });
       document.documentElement.setAttribute('data-color', 'custom');
       updateSettingsUI();
     };
@@ -1392,6 +1432,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     checkbox.addEventListener('change', (e) => {
       advPrefs[key] = e.target.checked;
       localStorage.setItem('app_advanced_prefs', JSON.stringify(advPrefs));
+      trackEvent('toggle_adv_weather', { option: key, enabled: e.target.checked });
       if (currentWeatherData) renderizarUI();
     });
   });
