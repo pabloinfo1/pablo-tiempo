@@ -481,6 +481,17 @@
           <div id="advanced-options-list" class="hidden flex-col pb-2 px-2 gap-1 border-t border-border-color">
             <label class="flex items-center justify-between p-3 rounded-xl hover:bg-md-surface-container cursor-pointer transition">
               <div class="flex items-center gap-2.5">
+                <span class="material-symbols-rounded text-[18px] text-md-primary">water_drop</span>
+                <span class="text-sm font-medium text-text-main">Probabilidad de precipitación (%)</span>
+              </div>
+              <div class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" class="adv-pref-checkbox sr-only peer" data-key="precip">
+                <div class="w-10 h-6 bg-border-color peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-4 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-md-primary"></div>
+              </div>
+            </label>
+
+            <label class="flex items-center justify-between p-3 rounded-xl hover:bg-md-surface-container cursor-pointer transition">
+              <div class="flex items-center gap-2.5">
                 <span class="material-symbols-rounded text-[18px] text-md-primary">wb_sunny</span>
                 <span class="text-sm font-medium text-text-main">Radiación ultravioleta (UV)</span>
               </div>
