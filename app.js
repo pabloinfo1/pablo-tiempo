@@ -595,7 +595,7 @@ function renderizarCarrusel(horasArray, titulo = 'Próximas horas', esDiaFuturo 
     if (advPrefs.precip && probPrecip !== null) {
       const probMostrar = probPrecip !== null ? probPrecip : 0;
       bloquePrecipitacionHTML += `
-        <div class="flex items-center gap-[2px] text-md-primary" title="Probabilidad de precipitación">
+        <div class="flex items-center gap-[2px] text-text-muted" title="Probabilidad de precipitación">
           <span class="material-symbols-rounded text-[14px]">water_drop</span>
           <span class="text-[11px] font-bold">${probMostrar}%</span>
         </div>
@@ -931,7 +931,7 @@ function renderizarListaDias(data) {
       </div>
       <div class="flex items-center gap-1.5 w-20">
         <span class="material-symbols-rounded text-md-primary text-[24px]">${escaparHTML(dia.icono || 'cloud')}</span>
-        <span class="text-xs font-bold ${probPrecipDia > 0 ? 'text-md-primary' : 'text-text-muted opacity-60'}">${probPrecipDia}%</span>
+        <span class="text-xs font-bold text-text-muted">${probPrecipDia}%</span>
       </div>
       <div class="flex gap-1 text-right w-auto items-center">
         <div class="flex gap-3 w-20 justify-end">
