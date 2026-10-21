@@ -625,7 +625,9 @@ function abrirModalAlerta(alertaPrincipal, todasLasAlertas = []) {
   const estilos = obtenerEstilosNivelAlerta(alertaPrincipal.nivel);
   iconWrap.style.cssText = estilos.iconWrapStyle;
   badge.style.cssText = estilos.badgeStyle;
-  badge.textContent = alertaPrincipal.es_futuro ? `${estilos.etiqueta} (Próximo)` : estilos.etiqueta;
+  
+  const prefijoFuturo = alertaPrincipal.es_futuro ? 'Próximo ' : '';
+  badge.textContent = `${prefijoFuturo}${estilos.etiqueta}`;
 
   title.textContent = alertaPrincipal.fenomeno || estilos.etiquetaCorta;
   municipioEl.textContent = obtenerNombreMunicipioLimpio(currentWeatherData);
@@ -654,8 +656,8 @@ function abrirModalAlerta(alertaPrincipal, todasLasAlertas = []) {
       const itemBtn = document.createElement('button');
       itemBtn.type = 'button';
       itemBtn.className = 'w-full text-left p-3 rounded-2xl bg-md-surface-container hover:bg-md-surface-container-high transition flex items-center justify-between gap-2 border border-border-color/50';
-      const sufijoFuturo = otra.es_futuro ? ' (Próximo)' : '';
-      const tituloOtra = `${estOtra.etiquetaCorta}${otra.fenomeno ? ` · ${otra.fenomeno}` : ''}${sufijoFuturo}`;
+      const prefijoFuturoOtra = otra.es_futuro ? 'Próximo ' : '';
+      const tituloOtra = `${prefijoFuturoOtra}${estOtra.etiquetaCorta}${otra.fenomeno ? ` · ${otra.fenomeno}` : ''}`;
       const descOtra = otra.descripcion || estOtra.descripcionFallback;
 
       itemBtn.innerHTML = `
@@ -874,9 +876,6 @@ function renderizarCarrusel(horasArray, titulo = 'Próximas horas', esDiaFuturo 
 
     let bottomContentHTML = '';
     
-    // Al usar "mt-auto w-full" en el div envoltorio de los detalles extra,
-    // garantizamos que la probabilidad o los "mm" se queden siempre arriba pegados a la temperatura,
-    // y solo los textos adicionales se empujen hacia el borde inferior.
     if (esModoLifestyle) {
       bottomContentHTML = `
         <div class="flex flex-col items-center">
@@ -1033,14 +1032,14 @@ function renderizarUI() {
       alertasActivas.forEach(alerta => {
         const estilos = obtenerEstilosNivelAlerta(alerta.nivel);
         const textoFenomeno = alerta.fenomeno ? ` · ${alerta.fenomeno}` : '';
-        const sufijoFuturo = alerta.es_futuro ? ' (Próximo)' : '';
+        const prefijoFuturo = alerta.es_futuro ? 'Próximo ' : '';
         const badge = document.createElement('button');
         badge.type = 'button';
         badge.style.cssText = estilos.badgeStyle;
         badge.className = 'px-3.5 py-1.5 rounded-full flex items-center gap-1.5 text-xs font-semibold shadow-sm transition hover:opacity-90 active:scale-95 cursor-pointer';
         badge.innerHTML = `
           <span class="material-symbols-rounded text-[16px]">warning</span>
-          <span>${escaparHTML(estilos.etiquetaCorta + textoFenomeno + sufijoFuturo)}</span>
+          <span>${escaparHTML(prefijoFuturo + estilos.etiquetaCorta + textoFenomeno)}</span>
         `;
 
         badge.addEventListener('click', () => {
@@ -1315,6 +1314,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnOkAlertModal = document.getElementById('btn-ok-alert-modal');
 
   const btnForceUpdate = document.getElementById('btn-force-update');
+  
+  const btnFaq = document.getElementById('btn-faq');
+  const faqModal = document.getElementById('faq-modal');
+  const faqModalPanel = document.getElementById('faq-modal-panel');
+  const btnCloseFaqModal = document.getElementById('btn-close-faq-modal');
+  const btnOkFaqModal = document.getElementById('btn-ok-faq-modal');
 
   // Habilitar arrastre con ratón en el carrusel para PC
   const carruselHoras = document.getElementById('ui-carrusel-horas');
@@ -1370,6 +1375,40 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (welcomePrivacyLink) {
     welcomePrivacyLink.addEventListener('click', openPrivacyModal);
+  }
+
+  /* --- GESTIÓN DEL MODAL DE PREGUNTAS FRECUENTES (FAQ) --- */
+  const openFaqModal = () => {
+    faqModal.classList.remove('hidden');
+    faqModal.classList.add('flex');
+    void faqModal.offsetWidth;
+    faqModal.classList.remove('opacity-0');
+    if (faqModalPanel) faqModalPanel.classList.remove('scale-95');
+  };
+
+  const closeFaqModal = () => {
+    faqModal.classList.add('opacity-0');
+    if (faqModalPanel) faqModalPanel.classList.add('scale-95');
+    setTimeout(() => {
+      faqModal.classList.add('hidden');
+      faqModal.classList.remove('flex');
+    }, 300);
+  };
+
+  if (btnCloseFaqModal) btnCloseFaqModal.addEventListener('click', closeFaqModal);
+  if (btnOkFaqModal) btnOkFaqModal.addEventListener('click', closeFaqModal);
+  if (faqModal) {
+    faqModal.addEventListener('click', (e) => {
+      if (e.target === faqModal) closeFaqModal();
+    });
+  }
+
+  if (btnFaq) {
+    btnFaq.addEventListener('click', () => {
+      trackEvent('options_menu_click', { button: 'faq' });
+      closeOptionsModal(true);
+      openFaqModal();
+    });
   }
 
   /* --- CIERRES DE MODALES ADICIONALES --- */
