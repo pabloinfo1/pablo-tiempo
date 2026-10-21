@@ -602,15 +602,14 @@ function renderizarCarrusel(horasArray, titulo = 'Próximas horas', esDiaFuturo 
     const probTorm = parsearProbabilidadPct(hora.prob_tormenta) || 0;
 
     let esPeligro = false;
+    const racha = Number(hora.rachas_viento) || Number(hora.viento_kmh) || 0;
+    const st = hora.sensacion_termica !== undefined ? Number(hora.sensacion_termica) : Number(hora.temperatura);
+    
     if (mode === 'moto') {
-       const racha = Number(hora.rachas_viento) || Number(hora.viento_kmh) || 0;
-       const temp = Number(hora.temperatura);
        const nieve = hora.cota_nieve !== null && hora.cota_nieve !== undefined && hora.cota_nieve !== '0';
-       if (nieve || (probPrecip || 0) > 40 || precipMm > 0.5 || racha > 40 || temp < 6) esPeligro = true;
+       if (nieve || precipMm > 0.1 || racha > 35 || st < 6 || st > 34) esPeligro = true;
     } else if (mode === 'botellon') {
-       const racha = Number(hora.rachas_viento) || Number(hora.viento_kmh) || 0;
-       const temp = Number(hora.temperatura);
-       if ((probPrecip || 0) > 40 || precipMm > 0.5 || temp < 10 || racha > 30) esPeligro = true;
+       if (precipMm > 0.1 || st < 12 || racha > 30) esPeligro = true;
     }
 
     let bloquePrecipitacionHTML = '';
@@ -629,7 +628,7 @@ function renderizarCarrusel(horasArray, titulo = 'Próximas horas', esDiaFuturo 
       const mmFormateado = Number.isInteger(precipMm) ? precipMm : precipMm.toFixed(1).replace('.0', '');
       const mtClass = bloquePrecipitacionHTML ? 'mt-1 ' : '';
       const iconoPrecip = probTorm > 0 ? '💧⚡' : '💧';
-      const clasesChip = esPeligro ? 'bg-red-500/10 border-red-500/40 text-red-500' : 'bg-md-surface-container border-md-primary text-md-primary';
+      const clasesChip = esPeligro ? 'bg-md-surface-container border-red-500/50 text-red-500/90' : 'bg-md-surface-container border-md-primary text-md-primary';
       
       bloquePrecipitacionHTML += `
         <span class="${mtClass}px-1.5 py-0.5 rounded-md border text-[10px] font-semibold leading-none whitespace-nowrap ${clasesChip}" title="Precipitación acumulada prevista">
@@ -680,7 +679,7 @@ function renderizarCarrusel(horasArray, titulo = 'Próximas horas', esDiaFuturo 
 
     if (esAhora) {
       if (esPeligro) {
-        bordeFondoClase = 'ring-2 ring-inset ring-red-500 bg-red-500/10';
+        bordeFondoClase = 'ring-2 ring-inset ring-red-500 bg-md-surface-container-high';
         colorHoraClase = 'font-bold text-red-500';
         colorIconoClase = 'text-red-500';
       } else {
@@ -690,8 +689,8 @@ function renderizarCarrusel(horasArray, titulo = 'Próximas horas', esDiaFuturo 
       }
     } else {
       if (esPeligro) {
-        bordeFondoClase = 'bg-red-500/10 border border-red-500/30';
-        colorHoraClase = 'font-semibold text-red-500/90';
+        bordeFondoClase = 'bg-md-surface-container border border-red-500/70';
+        colorHoraClase = 'font-medium text-red-500/90';
         colorIconoClase = 'text-red-500/90';
       } else {
         bordeFondoClase = 'bg-md-surface-container border border-transparent';
@@ -732,13 +731,14 @@ function renderizarModoLifestyle(actualSincronizado, proximas24Horas = []) {
   const actual = actualSincronizado || {};
   const horasEvaluar = [actual, ...proximas24Horas.slice(0, 12)]; // Comprobar el día completo (próximas 12h)
   
-  const tempActual = Number(actual.temperatura) || 20;
-  const minTemp = Math.min(...horasEvaluar.map(h => Number(h.temperatura) || 20));
-  const maxTemp = Math.max(...horasEvaluar.map(h => Number(h.temperatura) || 20));
-  const maxProbLluvia = Math.max(...horasEvaluar.map(h => parsearProbabilidadPct(h.prob_precipitacion) || 0));
+  const minSt = Math.min(...horasEvaluar.map(h => h.sensacion_termica !== undefined ? Number(h.sensacion_termica) : (Number(h.temperatura) || 20)));
+  const maxSt = Math.max(...horasEvaluar.map(h => h.sensacion_termica !== undefined ? Number(h.sensacion_termica) : (Number(h.temperatura) || 20)));
   const maxMmLluvia = Math.max(...horasEvaluar.map(h => parsearPrecipitacionMm(h.precipitacion_mm) || 0));
   const maxRacha = Math.max(...horasEvaluar.map(h => Number(h.rachas_viento) || Number(h.viento_kmh) || 0));
   const hayNieve = horasEvaluar.some(h => h.cota_nieve !== null && h.cota_nieve !== undefined && h.cota_nieve !== '0');
+  
+  const dia0 = (currentWeatherData && Array.isArray(currentWeatherData.proximos_dias) && currentWeatherData.proximos_dias[0]) || {};
+  const uvMax = Number(actual.uv) || Number(dia0.uv_max) || 0;
 
   let titulo = '';
   let mensaje = '';
@@ -750,14 +750,14 @@ function renderizarModoLifestyle(actualSincronizado, proximas24Horas = []) {
     
     if (hayNieve) {
       mensaje = 'Posible nieve o hielo en ruta. Mejor deja la moto aparcada hoy, no te la juegues.';
-    } else if (maxProbLluvia > 40 || maxMmLluvia > 0.5) {
+    } else if (maxMmLluvia > 0.1) {
       mensaje = 'Riesgo de lluvia y asfalto mojado en las próximas horas. Tacto con el gas y aumenta la distancia de seguridad.';
-    } else if (maxRacha > 40) {
+    } else if (maxRacha > 35) {
       mensaje = `Viento lateral fuerte previsto (hasta ${maxRacha} km/h). Ojo en puentes y adelantamientos con la moto.`;
-    } else if (minTemp < 6) {
-      mensaje = `Hará un frío que pela (bajando a ${minTemp}°C). Equípate bien y ten cuidado con las placas de hielo en curva.`;
-    } else if (maxTemp > 34) {
-      mensaje = `Asfalto hirviendo (hasta ${maxTemp}°C). Vigila presiones y no te ases con la chaqueta.`;
+    } else if (minSt < 6) {
+      mensaje = `Hará un frío que pela (ST bajando a ${minSt}°C). Equípate bien y ten cuidado con las placas de hielo en curva.`;
+    } else if (maxSt > 34) {
+      mensaje = `Asfalto hirviendo (ST hasta ${maxSt}°C). Vigila presiones y no te ases con la chaqueta.`;
     } else {
       mensaje = 'Condiciones espectaculares para arrancar la moto y salir a curvear. ¡Disfruta de la ruta y V\'s!';
     }
@@ -765,14 +765,16 @@ function renderizarModoLifestyle(actualSincronizado, proximas24Horas = []) {
     titulo = 'Modo Botellón';
     icono = 'local_bar';
 
-    if (maxProbLluvia > 40 || maxMmLluvia > 0.5) {
+    if (maxMmLluvia > 0.1) {
       mensaje = 'Pinta feo en la calle en las próximas horas. Mejor montad un evento bajo techo estilo Pablo\'s House o se os aguará el plan.';
-    } else if (minTemp < 10) {
-      mensaje = `Rasquita seria esta noche (bajando a ${minTemp}°C). O llevas buen abrigo a la plaza o tendréis que calentar a base de chupitos.`;
+    } else if (minSt < 12) {
+      mensaje = `Rasquita seria esta noche (ST bajando a ${minSt}°C). O llevas buen abrigo a la plaza o tendréis que calentar a base de chupitos.`;
     } else if (maxRacha > 30) {
       mensaje = `Mucho viento previsto (hasta ${maxRacha} km/h). Cuidado en la calle que vuelan los vasos y el hielo.`;
-    } else if (tempActual > 28) {
-      mensaje = `Noche tropical (${tempActual}°C). Bebed rápido que los hielos en la calle os van a durar un suspiro.`;
+    } else if (uvMax >= 8) {
+      mensaje = `Precaución si es tardeo, el sol pega fuerte (UV ${uvMax}). Busca buena sombra o te torrarás vivo.`;
+    } else if (maxSt > 28) {
+      mensaje = `Noche tropical (ST ${maxSt}°C). Bebed rápido que los hielos en la calle os van a durar un suspiro.`;
     } else {
       mensaje = 'Clima perfecto para la plaza. Buen rollo, que rule el hielo y no hagáis mucho ruido.';
     }
