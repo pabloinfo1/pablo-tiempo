@@ -755,7 +755,6 @@ function renderizarCarrusel(horasArray, titulo = 'Próximas horas', esDiaFuturo 
   const carrusel = document.getElementById('ui-carrusel-horas');
   if (!carrusel) return;
   carrusel.innerHTML = '';
-  carrusel.scrollTo({ left: 0, behavior: 'smooth' });
 
   const mode = localStorage.getItem('app_lifestyle_mode');
   const esModoLifestyle = mode === 'moto' || mode === 'botellon';
@@ -902,6 +901,28 @@ function renderizarCarrusel(horasArray, titulo = 'Próximas horas', esDiaFuturo 
     `;
     
     carrusel.appendChild(card);
+  });
+
+  // Posicionamiento inteligente del scroll tras pintar las tarjetas
+  requestAnimationFrame(() => {
+    if (esDiaFuturo && horasArray.length > 0) {
+      const targetIndex = horasArray.findIndex(h => {
+        const num = h._horaNum ?? parseInt(String(h.hora).split(':')[0], 10);
+        return !isNaN(num) && num >= 7;
+      });
+
+      if (targetIndex !== -1 && carrusel.children[targetIndex]) {
+        const targetEl = carrusel.children[targetIndex];
+        const firstEl = carrusel.children[0];
+        // Calculamos la posición relativa restando el offset del primer elemento y un margen izquierdo de 24px
+        const scrollPos = Math.max(0, targetEl.offsetLeft - firstEl.offsetLeft - 24);
+        carrusel.scrollTo({ left: scrollPos, behavior: 'auto' });
+        return;
+      }
+    }
+    
+    // Comportamiento por defecto / Hoy
+    carrusel.scrollTo({ left: 0, behavior: 'smooth' });
   });
 }
 
