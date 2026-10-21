@@ -873,18 +873,22 @@ function renderizarCarrusel(horasArray, titulo = 'Próximas horas', esDiaFuturo 
     const tempColor = (motivoFrio || motivoCalor) ? 'text-red-500/90' : 'text-text-main';
 
     let bottomContentHTML = '';
+    
+    // Al usar "mt-auto w-full" en el div envoltorio de los detalles extra,
+    // garantizamos que la probabilidad o los "mm" se queden siempre arriba pegados a la temperatura,
+    // y solo los textos adicionales se empujen hacia el borde inferior.
     if (esModoLifestyle) {
       bottomContentHTML = `
+        <div class="flex flex-col items-center">
+          ${bloquePrecipitacionHTML}
+        </div>
         <div class="mt-auto w-full flex flex-col items-center justify-end">
-          <div class="flex flex-col items-center">
-            ${bloquePrecipitacionHTML}
-          </div>
           ${detallesExtraHoraHTML}
         </div>
       `;
     } else {
       bottomContentHTML = `
-        <div class="flex flex-col items-center mt-auto">
+        <div class="flex flex-col items-center mt-auto w-full">
           ${bloquePrecipitacionHTML}
         </div>
         ${detallesExtraHoraHTML}
