@@ -22,7 +22,7 @@
   </script>
   
   <!-- Metadatos PWA & iOS -->
-  <meta name="theme-color" content="#0f172a">
+  <meta id="meta-theme-color" name="theme-color" content="#0f172a">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Pablómetro">
@@ -276,8 +276,11 @@
     <section id="ui-lista-dias" class="bg-md-surface-container rounded-md-card overflow-hidden mb-6">
     </section>
 
-    <!-- Última actualización -->
-    <p id="ui-ultima-act" class="text-center text-xs text-text-muted mt-2 mb-6 font-medium"></p>
+    <!-- Última actualización interactiva -->
+    <div class="relative mt-2 mb-6 flex justify-center">
+      <p id="ui-ultima-act" class="text-center text-xs text-text-muted font-medium"></p>
+      <button id="btn-force-update" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" aria-label="Forzar actualización"></button>
+    </div>
   </main>
 
   <!-- Barra de navegación inferior -->
