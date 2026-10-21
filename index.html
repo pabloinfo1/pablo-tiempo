@@ -211,12 +211,12 @@
     <span id="toast-message" class="text-sm font-medium">Mensaje</span>
   </div>
 
-  <!-- Cabecera superior -->
+  <!-- Cabecera superior (clicable para cambiar de municipio) -->
   <header class="relative flex justify-center items-center mb-6 pt-2 min-h-12" id="header-top">
     <div class="absolute left-0 flex items-center text-md-primary top-1/2 -translate-y-1/2">
       <img src="favicon.png" alt="Logo" class="w-8 h-8 rounded-lg object-contain">
     </div>
-    <h1 id="ui-municipio" class="text-xl sm:text-2xl font-semibold tracking-tight text-center w-full px-11 whitespace-normal break-words text-balance leading-snug">
+    <h1 id="ui-municipio" title="Pulsa para cambiar de municipio" class="text-xl sm:text-2xl font-semibold tracking-tight text-center w-full px-11 whitespace-normal break-words text-balance leading-snug cursor-pointer hover:opacity-80 active:scale-[0.99] transition">
       Cargando...
     </h1>
   </header>
@@ -276,10 +276,12 @@
     <section id="ui-lista-dias" class="bg-md-surface-container rounded-md-card overflow-hidden mb-6">
     </section>
 
-    <!-- Última actualización interactiva -->
-    <div class="relative mt-2 mb-6 flex justify-center">
-      <p id="ui-ultima-act" class="text-center text-xs text-text-muted font-medium"></p>
-      <button id="btn-force-update" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" aria-label="Forzar actualización"></button>
+    <!-- Última actualización interactiva con icono visible -->
+    <div class="mt-2 mb-6 flex justify-center">
+      <button id="btn-force-update" type="button" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs text-text-muted hover:text-text-main hover:bg-md-surface-container active:scale-95 transition cursor-pointer font-medium" aria-label="Forzar actualización">
+        <span id="icono-force-update" class="material-symbols-rounded text-[15px] text-md-primary">sync</span>
+        <span id="ui-ultima-act"></span>
+      </button>
     </div>
   </main>
 
@@ -376,10 +378,14 @@
         </button>
       </div>
 
-      <div class="bg-md-surface-container rounded-2xl p-4 flex flex-col gap-3 border border-border-color/60">
+      <div class="bg-md-surface-container rounded-2xl p-4 flex flex-col gap-2.5 border border-border-color/60">
         <div class="flex items-center gap-2 text-xs font-semibold text-text-muted uppercase tracking-wider">
           <span class="material-symbols-rounded text-[16px] text-md-primary">location_on</span>
           <span id="alert-modal-municipio">Localidad</span>
+        </div>
+        <div id="alert-modal-horario-wrap" class="hidden items-center gap-2 text-xs font-medium text-md-primary">
+          <span class="material-symbols-rounded text-[15px]">schedule</span>
+          <span id="alert-modal-horario"></span>
         </div>
         <p id="alert-modal-desc" class="text-sm text-text-main leading-relaxed">
           Descripción detallada del aviso meteorológico.
