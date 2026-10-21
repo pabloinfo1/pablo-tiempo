@@ -163,6 +163,14 @@ function setEstadoCarga(cargando) {
   }
 }
 
+function actualizarThemeColorNavegador() {
+  const metaTheme = document.getElementById('meta-theme-color');
+  if (!metaTheme) return;
+  const currentTheme = localStorage.getItem('app_theme') || 'system';
+  const isDark = currentTheme === 'dark' || (currentTheme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  metaTheme.setAttribute('content', isDark ? '#0f172a' : '#f8fafc');
+}
+
 /* --- BLOQUEO DE ZOOM iOS Y ARRASTRE DE RATÓN EN PC --- */
 function bloquearZoomIOS() {
   let lastTouchEnd = 0;
@@ -666,7 +674,7 @@ function renderizarCarrusel(horasArray, titulo = 'Próximas horas', esDiaFuturo 
   });
 }
 
-function renderizarModoLifestyle(actualSincronizado) {
+function renderizarModoLifestyle(actualSincronizado, proximas24Horas = []) {
   const container = document.getElementById('ui-lifestyle-mode');
   if (!container) return;
 
@@ -678,12 +686,15 @@ function renderizarModoLifestyle(actualSincronizado) {
   }
 
   const actual = actualSincronizado || {};
-  const temp = Number(actual.temperatura) || 20;
-  const probLluvia = parsearProbabilidadPct(actual.prob_precipitacion) || 0;
-  const mmLluvia = parsearPrecipitacionMm(actual.precipitacion_mm) || 0;
-  const viento = Number(actual.viento_kmh) || 0;
-  const racha = Number(actual.rachas_viento) || viento;
-  const nieve = actual.cota_nieve !== null && actual.cota_nieve !== undefined && actual.cota_nieve !== '0';
+  const horasEvaluar = [actual, ...proximas24Horas.slice(0, 12)]; // Comprobar el día completo (próximas 12h)
+  
+  const tempActual = Number(actual.temperatura) || 20;
+  const minTemp = Math.min(...horasEvaluar.map(h => Number(h.temperatura) || 20));
+  const maxTemp = Math.max(...horasEvaluar.map(h => Number(h.temperatura) || 20));
+  const maxProbLluvia = Math.max(...horasEvaluar.map(h => parsearProbabilidadPct(h.prob_precipitacion) || 0));
+  const maxMmLluvia = Math.max(...horasEvaluar.map(h => parsearPrecipitacionMm(h.precipitacion_mm) || 0));
+  const maxRacha = Math.max(...horasEvaluar.map(h => Number(h.rachas_viento) || Number(h.viento_kmh) || 0));
+  const hayNieve = horasEvaluar.some(h => h.cota_nieve !== null && h.cota_nieve !== undefined && h.cota_nieve !== '0');
 
   let titulo = '';
   let mensaje = '';
@@ -693,16 +704,16 @@ function renderizarModoLifestyle(actualSincronizado) {
     titulo = 'Modo Moto';
     icono = 'two_wheeler';
     
-    if (nieve) {
-      mensaje = 'Posible nieve o hielo. Mejor deja la moto aparcada hoy, no te la juegues.';
-    } else if (probLluvia > 40 || mmLluvia > 0.5) {
-      mensaje = 'Asfalto mojado y lluvia a la vista. Tacto con el gas y aumenta la distancia de seguridad.';
-    } else if (racha > 40) {
-      mensaje = `Viento lateral fuerte (${racha} km/h). Ojo en puentes y adelantamientos con la moto.`;
-    } else if (temp < 6) {
-      mensaje = `Hace un frío que pela (${temp}°C). Equípate bien y ten cuidado con las placas de hielo en curva.`;
-    } else if (temp > 34) {
-      mensaje = `Asfalto hirviendo (${temp}°C). Vigila presiones y no te ases con la chaqueta.`;
+    if (hayNieve) {
+      mensaje = 'Posible nieve o hielo en ruta. Mejor deja la moto aparcada hoy, no te la juegues.';
+    } else if (maxProbLluvia > 40 || maxMmLluvia > 0.5) {
+      mensaje = 'Riesgo de lluvia y asfalto mojado en las próximas horas. Tacto con el gas y aumenta la distancia de seguridad.';
+    } else if (maxRacha > 40) {
+      mensaje = `Viento lateral fuerte previsto (hasta ${maxRacha} km/h). Ojo en puentes y adelantamientos con la moto.`;
+    } else if (minTemp < 6) {
+      mensaje = `Hará un frío que pela (bajando a ${minTemp}°C). Equípate bien y ten cuidado con las placas de hielo en curva.`;
+    } else if (maxTemp > 34) {
+      mensaje = `Asfalto hirviendo (hasta ${maxTemp}°C). Vigila presiones y no te ases con la chaqueta.`;
     } else {
       mensaje = 'Condiciones espectaculares para arrancar la moto y salir a curvear. ¡Disfruta de la ruta y V\'s!';
     }
@@ -710,14 +721,14 @@ function renderizarModoLifestyle(actualSincronizado) {
     titulo = 'Modo Botellón';
     icono = 'local_bar';
 
-    if (probLluvia > 40 || mmLluvia > 0.5) {
-      mensaje = 'Pinta muy feo en la calle. Mejor montad un evento bajo techo estilo Pablo\'s House o se os van a aguar los cubatas.';
-    } else if (temp < 10) {
-      mensaje = `Rasquita seria (${temp}°C). O llevas buen abrigo a la plaza o tendréis que calentar a base de chupitos.`;
-    } else if (racha > 30) {
-      mensaje = `Mucho viento (${racha} km/h). Cuidado en la calle que vuelan los vasos y el hielo.`;
-    } else if (temp > 28) {
-      mensaje = `Noche tropical (${temp}°C). Bebed rápido que los hielos en la calle os van a durar un suspiro.`;
+    if (maxProbLluvia > 40 || maxMmLluvia > 0.5) {
+      mensaje = 'Pinta feo en la calle en las próximas horas. Mejor montad un evento bajo techo estilo Pablo\'s House o se os aguará el plan.';
+    } else if (minTemp < 10) {
+      mensaje = `Rasquita seria esta noche (bajando a ${minTemp}°C). O llevas buen abrigo a la plaza o tendréis que calentar a base de chupitos.`;
+    } else if (maxRacha > 30) {
+      mensaje = `Mucho viento previsto (hasta ${maxRacha} km/h). Cuidado en la calle que vuelan los vasos y el hielo.`;
+    } else if (tempActual > 28) {
+      mensaje = `Noche tropical (${tempActual}°C). Bebed rápido que los hielos en la calle os van a durar un suspiro.`;
     } else {
       mensaje = 'Clima perfecto para la plaza. Buen rollo, que rule el hielo y no hagáis mucho ruido.';
     }
@@ -809,7 +820,7 @@ function renderizarUI() {
   }
 
   // Modos Dinámicos de Estilo de Vida
-  renderizarModoLifestyle(actualSincronizado);
+  renderizarModoLifestyle(actualSincronizado, proximas24Horas);
 
   // Datos extra configurables por el usuario
   const extraDiv = document.getElementById('ui-datos-extra');
@@ -1064,6 +1075,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const alertModal = document.getElementById('alert-modal');
   const btnCloseAlertModal = document.getElementById('btn-close-alert-modal');
   const btnOkAlertModal = document.getElementById('btn-ok-alert-modal');
+  
+  const btnForceUpdate = document.getElementById('btn-force-update');
 
   // Habilitar arrastre con ratón en el carrusel para PC
   const carruselHoras = document.getElementById('ui-carrusel-horas');
@@ -1185,6 +1198,16 @@ document.addEventListener('DOMContentLoaded', () => {
         diaSeleccionadoIndex = null;
         renderizarUI();
         window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    });
+  }
+
+  if (btnForceUpdate) {
+    btnForceUpdate.addEventListener('click', () => {
+      const savedIne = localStorage.getItem('saved_ine');
+      if (savedIne) {
+        mostrarToast('Actualizando datos...', 'sync');
+        cargarTiempo(savedIne);
       }
     });
   }
@@ -1452,6 +1475,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnModeBotellon) {
       btnModeBotellon.dataset.active = currentLifestyleMode === 'botellon' ? 'true' : 'false';
     }
+    
+    actualizarThemeColorNavegador();
   };
 
   const toggleLifestyleMode = (mode) => {
@@ -1473,6 +1498,7 @@ document.addEventListener('DOMContentLoaded', () => {
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
     const currentColor = localStorage.getItem('app_color') || 'blue';
     if (currentColor.startsWith('#')) window.applyCustomColor(currentColor);
+    actualizarThemeColorNavegador();
   });
 
   themeBtns.forEach(btn => {
