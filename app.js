@@ -594,16 +594,31 @@ function renderizarCarrusel(horasArray, titulo = 'Próximas horas', esDiaFuturo 
   carrusel.innerHTML = '';
   carrusel.scrollTo({ left: 0, behavior: 'smooth' });
 
+  const mode = localStorage.getItem('app_lifestyle_mode');
+
   horasArray.forEach((hora, index) => {
     const probPrecip = parsearProbabilidadPct(hora.prob_precipitacion);
     const precipMm = parsearPrecipitacionMm(hora.precipitacion_mm);
+    const probTorm = parsearProbabilidadPct(hora.prob_tormenta) || 0;
+
+    let esPeligro = false;
+    if (mode === 'moto') {
+       const racha = Number(hora.rachas_viento) || Number(hora.viento_kmh) || 0;
+       const temp = Number(hora.temperatura);
+       const nieve = hora.cota_nieve !== null && hora.cota_nieve !== undefined && hora.cota_nieve !== '0';
+       if (nieve || (probPrecip || 0) > 40 || precipMm > 0.5 || racha > 40 || temp < 6) esPeligro = true;
+    } else if (mode === 'botellon') {
+       const racha = Number(hora.rachas_viento) || Number(hora.viento_kmh) || 0;
+       const temp = Number(hora.temperatura);
+       if ((probPrecip || 0) > 40 || precipMm > 0.5 || temp < 10 || racha > 30) esPeligro = true;
+    }
 
     let bloquePrecipitacionHTML = '';
 
     if (advPrefs.precip && probPrecip !== null) {
       const probMostrar = probPrecip !== null ? probPrecip : 0;
       bloquePrecipitacionHTML += `
-        <div class="flex items-center gap-[2px] text-text-muted" title="Probabilidad de precipitación">
+        <div class="flex items-center gap-[2px] ${esPeligro ? 'text-red-500/80' : 'text-text-muted'}" title="Probabilidad de precipitación">
           <span class="material-symbols-rounded text-[14px]">water_drop</span>
           <span class="text-[11px] font-bold">${probMostrar}%</span>
         </div>
@@ -613,9 +628,12 @@ function renderizarCarrusel(horasArray, titulo = 'Próximas horas', esDiaFuturo 
     if (precipMm > 0) {
       const mmFormateado = Number.isInteger(precipMm) ? precipMm : precipMm.toFixed(1).replace('.0', '');
       const mtClass = bloquePrecipitacionHTML ? 'mt-1 ' : '';
+      const iconoPrecip = probTorm > 0 ? '💧⚡' : '💧';
+      const clasesChip = esPeligro ? 'bg-red-500/10 border-red-500/40 text-red-500' : 'bg-md-surface-container border-md-primary text-md-primary';
+      
       bloquePrecipitacionHTML += `
-        <span class="${mtClass}px-1.5 py-0.5 rounded-md bg-md-surface-container border border-md-primary text-md-primary text-[10px] font-semibold leading-none whitespace-nowrap" title="Precipitación acumulada prevista">
-          💧 ${mmFormateado} mm
+        <span class="${mtClass}px-1.5 py-0.5 rounded-md border text-[10px] font-semibold leading-none whitespace-nowrap ${clasesChip}" title="Precipitación acumulada prevista">
+          ${iconoPrecip} ${mmFormateado} mm
         </span>
       `;
     }
@@ -644,8 +662,10 @@ function renderizarCarrusel(horasArray, titulo = 'Próximas horas', esDiaFuturo 
     }
 
     if (itemsExtraHora.length > 0) {
+      const bColor = esPeligro ? 'border-red-500/20' : 'border-border-color/60';
+      const tColor = esPeligro ? 'text-red-500/80' : 'text-text-muted';
       detallesExtraHoraHTML = `
-        <div class="w-full border-t border-border-color/60 mt-2 pt-1.5 flex flex-col items-center gap-0.5 text-[10px] text-text-muted font-medium leading-tight text-center">
+        <div class="w-full border-t ${bColor} mt-2 pt-1.5 flex flex-col items-center gap-0.5 text-[10px] ${tColor} font-medium leading-tight text-center">
           ${itemsExtraHora.map(txt => `<span class="truncate max-w-full">${txt}</span>`).join('')}
         </div>
       `;
@@ -653,17 +673,41 @@ function renderizarCarrusel(horasArray, titulo = 'Próximas horas', esDiaFuturo 
 
     const esAhora = !esDiaFuturo && index === 0;
     const etiquetaHora = esAhora ? 'Ahora' : escaparHTML(hora.hora || '--:--');
+
+    let bordeFondoClase = '';
+    let colorHoraClase = '';
+    let colorIconoClase = '';
+
+    if (esAhora) {
+      if (esPeligro) {
+        bordeFondoClase = 'ring-2 ring-inset ring-red-500 bg-red-500/10';
+        colorHoraClase = 'font-bold text-red-500';
+        colorIconoClase = 'text-red-500';
+      } else {
+        bordeFondoClase = 'ring-2 ring-inset ring-md-primary bg-md-surface-container-high';
+        colorHoraClase = 'font-bold text-md-primary';
+        colorIconoClase = 'text-md-primary';
+      }
+    } else {
+      if (esPeligro) {
+        bordeFondoClase = 'bg-red-500/10 border border-red-500/30';
+        colorHoraClase = 'font-semibold text-red-500/90';
+        colorIconoClase = 'text-red-500/90';
+      } else {
+        bordeFondoClase = 'bg-md-surface-container border border-transparent';
+        colorHoraClase = 'font-medium text-text-muted';
+        colorIconoClase = 'text-md-primary';
+      }
+    }
+
     const card = document.createElement('div');
     const anchoCard = (itemsExtraHora.length > 0 || precipMm > 0) ? 'w-[96px]' : 'w-[84px]';
-    const bordeAhora = esAhora
-      ? 'ring-2 ring-inset ring-md-primary bg-md-surface-container-high'
-      : 'bg-md-surface-container';
 
-    card.className = `snap-start shrink-0 ${bordeAhora} rounded-2xl p-3.5 flex flex-col items-center ${anchoCard} shadow-sm transition-all`;
+    card.className = `snap-start shrink-0 ${bordeFondoClase} rounded-2xl p-3.5 flex flex-col items-center ${anchoCard} shadow-sm transition-all`;
 
     card.innerHTML = `
-      <span class="text-xs ${esAhora ? 'font-bold text-md-primary' : 'font-medium text-text-muted'} mb-1.5">${etiquetaHora}</span>
-      <span class="material-symbols-rounded text-[30px] text-md-primary mb-1.5">${escaparHTML(hora.icono || 'cloud')}</span>
+      <span class="text-xs ${colorHoraClase} mb-1.5">${etiquetaHora}</span>
+      <span class="material-symbols-rounded text-[30px] ${colorIconoClase} mb-1.5">${escaparHTML(hora.icono || 'cloud')}</span>
       <span class="text-[17px] font-semibold text-text-main leading-none mb-2">${escaparHTML(hora.temperatura ?? '--')}°</span>
       <div class="flex flex-col items-center mt-auto">
         ${bloquePrecipitacionHTML}
