@@ -763,14 +763,30 @@ function renderizarCarrusel(horasArray, titulo = 'Próximas horas', esDiaFuturo 
     const probTorm = parsearProbabilidadPct(hora.prob_tormenta) || 0;
 
     let esPeligro = false;
+    let motivoFrio = false;
+    let motivoCalor = false;
+    let motivoViento = false;
+    let motivoNieve = false;
+
     const racha = obtenerNumeroValido(hora.rachas_viento, hora.viento_kmh) ?? 0;
     const st = obtenerNumeroValido(hora.sensacion_termica, hora.temperatura) ?? 20;
 
     if (mode === 'moto') {
-      const nieveReal = hayRiesgoRealNieve(hora);
-      if (nieveReal || precipMm > 0.1 || racha > 35 || st < 6 || st > 34) esPeligro = true;
+      if (hayRiesgoRealNieve(hora)) motivoNieve = true;
+      if (racha > 35) motivoViento = true;
+      if (st < 6) motivoFrio = true;
+      if (st > 34) motivoCalor = true;
+      
+      if (motivoNieve || precipMm > 0.1 || motivoViento || motivoFrio || motivoCalor) {
+        esPeligro = true;
+      }
     } else if (mode === 'botellon') {
-      if (precipMm > 0.1 || st < 12 || racha > 30) esPeligro = true;
+      if (st < 12) motivoFrio = true;
+      if (racha > 30) motivoViento = true;
+      
+      if (precipMm > 0.1 || motivoFrio || motivoViento) {
+        esPeligro = true;
+      }
     }
 
     let bloquePrecipitacionHTML = '';
@@ -801,19 +817,25 @@ function renderizarCarrusel(horasArray, titulo = 'Próximas horas', esDiaFuturo 
     let detallesExtraHoraHTML = '';
     const itemsExtraHora = [];
 
-    if (advPrefs.sensacion && hora.sensacion_termica !== undefined) {
+    // Forzamos la visualización temporal de las métricas que provocan la alerta (rojo)
+    // aunque el usuario no las tenga activadas globalmente en las opciones.
+    const mostrarSensacion = advPrefs.sensacion || motivoFrio || motivoCalor;
+    const mostrarViento = advPrefs.viento || motivoViento;
+    const mostrarNieve = advPrefs.nieve || motivoNieve;
+
+    if (mostrarSensacion && hora.sensacion_termica !== undefined) {
       itemsExtraHora.push(`ST ${escaparHTML(hora.sensacion_termica)}°`);
     }
     if (advPrefs.tormenta) {
       const torm = parsearProbabilidadPct(hora.prob_tormenta);
       if (torm !== null) itemsExtraHora.push(`⚡ ${torm}%`);
     }
-    if (advPrefs.viento) {
+    if (mostrarViento) {
       const rachaH = primerValorDefinido(hora.rachas_viento, hora.viento_kmh);
       const dirH = hora.direccion_viento || '';
       if (rachaH !== undefined) itemsExtraHora.push(`${escaparHTML(rachaH)}km/h${dirH ? ' ' + escaparHTML(dirH) : ''}`);
     }
-    if (advPrefs.nieve) {
+    if (mostrarNieve) {
       const nieveH = hora.cota_nieve;
       if (nieveH !== undefined && nieveH !== null && nieveH !== '0' && nieveH !== 0) {
         const nieveTxt = String(nieveH).endsWith('m') ? nieveH : `${nieveH}m`;
