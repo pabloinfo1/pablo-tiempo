@@ -7,6 +7,7 @@ let deferredInstallPrompt = null;
 let currentWeatherData = null;
 let lastFetchTimestamp = 0;
 let diaSeleccionadoIndex = null; // null = Próximas 24h desde hora actual, >0 = Día futuro seleccionado
+let currentWeatherAbortController = null;
 
 const DEFAULT_ADV_PREFS = {
   uv: false,
@@ -16,6 +17,27 @@ const DEFAULT_ADV_PREFS = {
   viento: false,
   precip: false
 };
+
+/* --- GESTIÓN DE BLOQUEO DE SCROLL EN MODALES --- */
+function actualizarBloqueoScrollBody() {
+  const idsModales = [
+    'welcome-modal',
+    'search-modal',
+    'options-modal',
+    'privacy-modal',
+    'faq-modal',
+    'alert-modal',
+    'ios-pwa-modal',
+    'timeout-modal'
+  ];
+  const algunModalAbierto = idsModales.some(id => {
+    const el = document.getElementById(id);
+    return el && !el.classList.contains('hidden');
+  });
+
+  document.body.classList.toggle('overflow-hidden', algunModalAbierto);
+  document.documentElement.classList.toggle('overflow-hidden', algunModalAbierto);
+}
 
 /* --- WATCHDOG (DETECCIÓN DE CARGA LENTA) --- */
 let tareasPendientes = 0;
@@ -32,6 +54,7 @@ function registrarTareaCarga() {
         void modal.offsetWidth; // forzar reflow
         modal.classList.remove('opacity-0');
         if (panel) panel.classList.remove('scale-95');
+        actualizarBloqueoScrollBody();
       }
     }, 12000); // 12 segundos de margen
   }
@@ -50,6 +73,7 @@ function finalizarTareaCarga() {
        setTimeout(() => {
          modal.classList.add('hidden');
          modal.classList.remove('flex');
+         actualizarBloqueoScrollBody();
        }, 300);
     }
   }
@@ -628,14 +652,25 @@ function extraerAlertasActivas(data) {
     const fin = item.fin || null;
     const esFuturo = Boolean(item.es_futuro) || (inicio ? Date.parse(inicio) > Date.now() : false);
 
-    const clave = `${normalizarTexto(nivel)}-${normalizarTexto(fenomeno)}`;
+    const clave = `${normalizarTexto(nivel)}-${normalizarTexto(fenomeno)}-${esFuturo ? 'futuro' : 'activo'}`;
     if (!vistas.has(clave)) {
       vistas.add(clave);
       alertasLimpias.push({ nivel, fenomeno, descripcion, inicio, fin, es_futuro: esFuturo });
     }
   });
 
-  return alertasLimpias;
+  const obtenerPeso = (niv) => {
+    const n = normalizarTexto(niv);
+    if (n.includes('roj')) return 3;
+    if (n.includes('naranj')) return 2;
+    if (n.includes('amarill')) return 1;
+    return 0;
+  };
+
+  return alertasLimpias.sort((a, b) => {
+    if (a.es_futuro !== b.es_futuro) return Number(a.es_futuro) - Number(b.es_futuro);
+    return obtenerPeso(b.nivel) - obtenerPeso(a.nivel);
+  });
 }
 
 function abrirModalAlerta(alertaPrincipal, todasLasAlertas = []) {
@@ -714,6 +749,7 @@ function abrirModalAlerta(alertaPrincipal, todasLasAlertas = []) {
   void modal.offsetWidth;
   modal.classList.remove('opacity-0');
   if (panel) panel.classList.remove('scale-95');
+  actualizarBloqueoScrollBody();
 }
 
 function cerrarModalAlerta() {
@@ -726,19 +762,33 @@ function cerrarModalAlerta() {
   setTimeout(() => {
     modal.classList.add('hidden');
     modal.classList.remove('flex');
+    actualizarBloqueoScrollBody();
   }, 300);
 }
 
-/* --- LÓGICA METEOROLÓGICA --- */
+/* --- LÓGICA METEOROLÓGICA (CON CANCELACIÓN DE CONDICIONES DE CARRERA) --- */
 async function cargarTiempo(ine, silencioso = false, forzar = false) {
+  if (currentWeatherAbortController) {
+    currentWeatherAbortController.abort();
+  }
+  const controller = new AbortController();
+  currentWeatherAbortController = controller;
+
   registrarTareaCarga();
   if (!silencioso) setEstadoCarga(true);
   try {
     const refreshParam = forzar ? '&refresh=1' : '';
-    const fetchOptions = forzar ? { cache: 'no-cache' } : {};
+    const fetchOptions = {
+      signal: controller.signal,
+      ...(forzar ? { cache: 'no-cache' } : {})
+    };
     const res = await fetch(`${WORKER_URL}?ine=${encodeURIComponent(ine)}${refreshParam}`, fetchOptions);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    currentWeatherData = await res.json();
+    const data = await res.json();
+
+    if (currentWeatherAbortController !== controller) return;
+
+    currentWeatherData = data;
     lastFetchTimestamp = Date.now();
     if (!silencioso) diaSeleccionadoIndex = null;
 
@@ -750,13 +800,16 @@ async function cargarTiempo(ine, silencioso = false, forzar = false) {
       mostrarToast('Datos meteorológicos actualizados', 'check_circle');
     }
   } catch (error) {
+    if (error.name === 'AbortError') return;
     console.error('Fallo al cargar el tiempo:', error);
     if (!currentWeatherData) {
       document.getElementById('ui-municipio').textContent = 'Error de conexión';
     }
     mostrarToast('No se pudo conectar con el servidor meteorológico', 'cloud_off');
   } finally {
-    if (!silencioso) setEstadoCarga(false);
+    if (currentWeatherAbortController === controller && !silencioso) {
+      setEstadoCarga(false);
+    }
     finalizarTareaCarga();
   }
 }
@@ -947,14 +1000,12 @@ function renderizarCarrusel(horasArray, titulo = 'Próximas horas', esDiaFuturo 
       if (targetIndex !== -1 && carrusel.children[targetIndex]) {
         const targetEl = carrusel.children[targetIndex];
         const firstEl = carrusel.children[0];
-        // Calculamos la posición relativa restando el offset del primer elemento y un margen izquierdo de 24px
         const scrollPos = Math.max(0, targetEl.offsetLeft - firstEl.offsetLeft - 24);
         carrusel.scrollTo({ left: scrollPos, behavior: 'auto' });
         return;
       }
     }
     
-    // Comportamiento por defecto / Hoy
     carrusel.scrollTo({ left: 0, behavior: 'smooth' });
   });
 }
@@ -971,7 +1022,36 @@ function renderizarModoLifestyle(actualSincronizado, proximas24Horas = []) {
   }
 
   const actual = actualSincronizado || {};
-  const horasEvaluar = [actual, ...proximas24Horas.slice(0, 12)];
+  const getHoraNum = (h) => h?._horaNum ?? extraerNumeroHora(h?.hora) ?? 12;
+  const horaActual = getHoraNum(actual);
+
+  let horasEvaluar = [];
+
+  if (mode === 'moto') {
+    // Excluir horas de madrugada profunda (01:00 a 06:00) salvo que se consulte en esa misma franja
+    const ventana12h = [actual, ...proximas24Horas.slice(0, 12)];
+    const horasRuta = ventana12h.filter(h => {
+      const hn = getHoraNum(h);
+      return hn >= 7 || hn === 0;
+    });
+    horasEvaluar = horasRuta.length > 0 ? horasRuta : ventana12h.slice(0, 6);
+  } else if (mode === 'botellon') {
+    // Si se consulta por la mañana o mediodía (06:00 - 17:00), evaluar la tarde/noche de hoy (18:00 - 04:00)
+    if (horaActual >= 6 && horaActual < 18) {
+      const horasTardeNoche = proximas24Horas.filter(h => {
+        const hn = getHoraNum(h);
+        return hn >= 18 || hn <= 4;
+      }).slice(0, 11);
+      horasEvaluar = horasTardeNoche.length > 0 ? horasTardeNoche : [actual, ...proximas24Horas.slice(0, 10)];
+    } else {
+      // Si ya es tarde/noche, evaluar desde ahora hasta el final de la madrugada
+      const ventanaActual = [actual, ...proximas24Horas.slice(0, 10)].filter(h => {
+        const hn = getHoraNum(h);
+        return hn >= 18 || hn <= 5;
+      });
+      horasEvaluar = ventanaActual.length > 0 ? ventanaActual : [actual, ...proximas24Horas.slice(0, 8)];
+    }
+  }
 
   const stValores = horasEvaluar.map(h => obtenerNumeroValido(h.sensacion_termica, h.temperatura) ?? 20);
   const minSt = Math.min(...stValores);
@@ -980,8 +1060,18 @@ function renderizarModoLifestyle(actualSincronizado, proximas24Horas = []) {
   const maxRacha = Math.max(...horasEvaluar.map(h => obtenerNumeroValido(h.rachas_viento, h.viento_kmh) ?? 0));
   const hayNieve = horasEvaluar.some(h => hayRiesgoRealNieve(h));
 
+  // Sensación térmica máxima exclusiva de horas nocturnas (>=20h o <=05h) para "Noche tropical"
+  const horasNocturnas = horasEvaluar.filter(h => {
+    const hn = getHoraNum(h);
+    return hn >= 20 || hn <= 5;
+  });
+  const maxStNoche = horasNocturnas.length > 0
+    ? Math.max(...horasNocturnas.map(h => obtenerNumeroValido(h.sensacion_termica, h.temperatura) ?? 20))
+    : 0;
+
   const dia0 = (currentWeatherData && Array.isArray(currentWeatherData.proximos_dias) && currentWeatherData.proximos_dias[0]) || {};
   const uvMax = obtenerNumeroValido(actual.uv, dia0.uv_max) ?? 0;
+  const esHorarioSolTardeo = horaActual >= 11 && horaActual <= 19;
 
   let titulo = '';
   let mensaje = '';
@@ -1009,15 +1099,16 @@ function renderizarModoLifestyle(actualSincronizado, proximas24Horas = []) {
     icono = 'local_bar';
 
     if (maxMmLluvia > 0.1) {
-      mensaje = 'Pinta feo en la calle en las próximas horas. Mejor montad un evento bajo techo estilo Pablo\'s House o se os aguará el plan.';
+      mensaje = 'Pinta feo en la calle para el plan. Mejor montad un evento bajo techo estilo Pablo\'s House o se os aguará la fiesta.';
     } else if (minSt < 12) {
-      mensaje = `Rasquita seria esta noche (ST bajando a ${minSt}°C). O llevas buen abrigo a la plaza o tendréis que calentar a base de chupitos.`;
+      mensaje = `Rasquita seria prevista (ST bajando a ${minSt}°C). O llevas buen abrigo a la plaza o tendréis que calentar a base de chupitos.`;
     } else if (maxRacha > 30) {
       mensaje = `Mucho viento previsto (hasta ${maxRacha} km/h). Cuidado en la calle que vuelan los vasos y el hielo.`;
-    } else if (uvMax >= 8) {
+    } else if (esHorarioSolTardeo && uvMax >= 8) {
       mensaje = `Precaución si es tardeo, el sol pega fuerte (UV ${uvMax}). Busca buena sombra o te torrarás vivo.`;
-    } else if (maxSt > 28) {
-      mensaje = `Noche tropical (ST ${maxSt}°C). Bebed rápido que los hielos en la calle os van a durar un suspiro.`;
+    } else if (maxStNoche > 26 || maxSt > 30) {
+      const refTemp = maxStNoche > 26 ? maxStNoche : maxSt;
+      mensaje = `Noche tropical (ST ${refTemp}°C). Bebed rápido que los hielos en la calle os van a durar un suspiro.`;
     } else {
       mensaje = 'Clima perfecto para la plaza. Buen rollo, que rule el hielo y no hagáis mucho ruido.';
     }
@@ -1194,8 +1285,8 @@ function renderizarListaDias(data) {
 
     const horasDelDia = obtenerHorasParaDia(data, dia, index);
     
-    // Evitar bug del carrusel si el día no tiene la previsión completa (mínimo 23h por cambios de hora)
-    const hasHoras = horasDelDia.length >= 23;
+    // Permitir abrir cualquier día futuro que disponga de tramos horarios en la predicción de AEMET
+    const hasHoras = horasDelDia.length > 0;
     const isSelected = diaSeleccionadoIndex === index;
 
     const row = document.createElement('div');
@@ -1405,6 +1496,7 @@ document.addEventListener('DOMContentLoaded', () => {
       setTimeout(() => {
         timeoutModal.classList.add('hidden');
         timeoutModal.classList.remove('flex');
+        actualizarBloqueoScrollBody();
       }, 300);
     });
   }
@@ -1442,6 +1534,7 @@ document.addEventListener('DOMContentLoaded', () => {
     void privacyModal.offsetWidth;
     privacyModal.classList.remove('opacity-0');
     if (privacyModalPanel) privacyModalPanel.classList.remove('scale-95');
+    actualizarBloqueoScrollBody();
   };
 
   const closePrivacyModal = () => {
@@ -1450,6 +1543,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
       privacyModal.classList.add('hidden');
       privacyModal.classList.remove('flex');
+      actualizarBloqueoScrollBody();
     }, 300);
   };
 
@@ -1472,6 +1566,7 @@ document.addEventListener('DOMContentLoaded', () => {
     void faqModal.offsetWidth;
     faqModal.classList.remove('opacity-0');
     if (faqModalPanel) faqModalPanel.classList.remove('scale-95');
+    actualizarBloqueoScrollBody();
   };
 
   const closeFaqModal = () => {
@@ -1480,6 +1575,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
       faqModal.classList.add('hidden');
       faqModal.classList.remove('flex');
+      actualizarBloqueoScrollBody();
     }, 300);
   };
 
@@ -1514,6 +1610,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } else if (volverATiempo) {
       actualizarBarraNavegacion('tiempo');
     }
+    actualizarBloqueoScrollBody();
   };
 
   const closeOptionsModal = (volverATiempo = true) => {
@@ -1524,6 +1621,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
       optionsModal.classList.add('hidden');
       optionsModal.classList.remove('flex');
+      actualizarBloqueoScrollBody();
     }, 300);
   };
 
@@ -1533,6 +1631,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
       iosPwaModal.classList.add('hidden');
       iosPwaModal.classList.remove('flex');
+      actualizarBloqueoScrollBody();
     }, 300);
   };
 
@@ -1632,6 +1731,7 @@ document.addEventListener('DOMContentLoaded', () => {
     actualizarBarraNavegacion('buscar');
     searchModal.classList.remove('hidden');
     searchModal.classList.add('flex');
+    actualizarBloqueoScrollBody();
     searchInput.focus();
     if (searchInput.value.trim() === '') {
       renderizarMunicipiosRecientes();
@@ -1780,6 +1880,7 @@ document.addEventListener('DOMContentLoaded', () => {
         bottomNav.classList.remove('hidden');
         bottomNav.classList.add('flex');
       }
+      actualizarBloqueoScrollBody();
     }
 
     document.getElementById('ui-municipio').textContent = munData ? munData.nombre : 'Cargando...';
@@ -1797,6 +1898,7 @@ document.addEventListener('DOMContentLoaded', () => {
       void optionsModal.offsetWidth;
       optionsOverlay.classList.remove('opacity-0');
       optionsPanel.classList.remove('translate-y-full');
+      actualizarBloqueoScrollBody();
     });
   }
 
@@ -1815,6 +1917,7 @@ document.addEventListener('DOMContentLoaded', () => {
         iosPwaModal.classList.add('flex');
         void iosPwaModal.offsetWidth;
         iosPwaModal.classList.remove('opacity-0');
+        actualizarBloqueoScrollBody();
       } else if (deferredInstallPrompt) {
         deferredInstallPrompt.prompt();
         const { outcome } = await deferredInstallPrompt.userChoice;
@@ -2052,6 +2155,7 @@ document.addEventListener('DOMContentLoaded', () => {
         bottomNav.classList.add('hidden');
         bottomNav.classList.remove('flex');
       }
+      actualizarBloqueoScrollBody();
       cargarMunicipiosDB();
     } else {
       Promise.all([
