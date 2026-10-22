@@ -229,7 +229,7 @@ function mostrarToast(mensaje, icono = 'info') {
 
 function setEstadoCarga(cargando) {
   const content = document.getElementById('weather-content');
-  const iconoRefresh = document.getElementById('icono-force-update');
+  const iconoRefresh = document.getElementById('icono-force-update'); // Puede ser null ahora por el cambio en HTML
 
   if (iconoRefresh) {
     if (cargando) iconoRefresh.classList.add('animate-spin');
@@ -1160,7 +1160,9 @@ function renderizarListaDias(data) {
     if (index === 0) return;
 
     const horasDelDia = obtenerHorasParaDia(data, dia, index);
-    const hasHoras = horasDelDia.length > 0;
+    
+    // Evitar bug del carrusel si el día no tiene la previsión completa (mínimo 23h por cambios de hora)
+    const hasHoras = horasDelDia.length >= 23;
     const isSelected = diaSeleccionadoIndex === index;
 
     const row = document.createElement('div');
