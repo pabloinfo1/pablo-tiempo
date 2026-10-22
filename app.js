@@ -402,34 +402,8 @@ function actualizarBarraNavegacion(seccionActiva = 'tiempo') {
   });
 }
 
-/* --- CONFIGURACIÓN PWA --- */
+/* --- CONFIGURACIÓN PWA (EVENTOS NATIVOS DE INSTALACIÓN) --- */
 function inicializarPWA() {
-  const baseUrl = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, '/');
-  const iconUrl = new URL('favicon.png', baseUrl).href;
-
-  const manifest = {
-    name: 'Pablómetro - El Tiempo',
-    short_name: 'Pablómetro',
-    start_url: baseUrl,
-    scope: baseUrl,
-    display: 'standalone',
-    background_color: '#0f172a',
-    theme_color: '#1b6ef3',
-    icons: [
-      {
-        src: iconUrl,
-        sizes: '192x192 512x512',
-        type: 'image/png',
-        purpose: 'any maskable'
-      }
-    ]
-  };
-
-  const link = document.createElement('link');
-  link.rel = 'manifest';
-  link.href = 'data:application/manifest+json;charset=utf-8,' + encodeURIComponent(JSON.stringify(manifest));
-  document.head.appendChild(link);
-
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredInstallPrompt = e;

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Pablómetro</title>
   <meta name="description" content="El tiempo oficial de la AEMET, pero con buen gusto. Una aplicación meteorológica ultraligera y minimalista.">
+  <link rel="canonical" href="https://pablometro.pabloinfo1.com/">
   
   <!-- Preconexiones críticas -->
   <link rel="preconnect" href="https://aemet-proxy.pabloinfo1.workers.dev" crossorigin>
@@ -22,21 +23,23 @@
   </script>
   
   <!-- Metadatos PWA & iOS -->
+  <link rel="manifest" href="/manifest.webmanifest">
   <meta id="meta-theme-color" name="theme-color" content="#0f172a">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Pablómetro">
-  <link rel="apple-touch-icon" href="favicon.png">
-  <link rel="icon" type="image/png" href="favicon.png" />
+  <link rel="apple-touch-icon" href="/favicon.png">
+  <link rel="icon" type="image/png" href="/favicon.png" />
   
-  <!-- Etiquetas Open Graph -->
+  <!-- Etiquetas Open Graph y Twitter -->
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://pabloinfo1.github.io/pablo-tiempo/">
+  <meta property="og:url" content="https://pablometro.pabloinfo1.com/">
   <meta property="og:title" content="Pablómetro">
   <meta property="og:description" content="El tiempo oficial de la AEMET, pero con buen gusto. Una aplicación meteorológica ultraligera y minimalista.">
-  <meta property="og:image" content="https://pabloinfo1.github.io/pablo-tiempo/banner-image.svg">
+  <meta property="og:image" content="https://pablometro.pabloinfo1.com/banner-image.svg">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://pabloinfo1.github.io/pablo-tiempo/banner-image.svg">
+  <meta name="twitter:image" content="https://pablometro.pabloinfo1.com/banner-image.svg">
   
   <!-- Fuentes optimizadas (sin @import bloqueante y con subset de iconos exactos) -->
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -440,7 +443,7 @@
         
         <div class="flex flex-col gap-1">
           <p><strong>¿Cómo se ha desarrollado la web?</strong></p>
-          <p class="text-text-muted text-[13px]">Se ha creado mediante la técnica de vibecoding (desarrollo y arquitectura de código guiados íntegramente por inteligencia artificial). El proyecto es totalmente abierto y puedes explorar todo el código fuente en <a href="https://github.com/pabloinfo1/pablo-tiempo" target="_blank" class="text-md-primary font-semibold underline underline-offset-2">GitHub</a>.</p>
+          <p class="text-text-muted text-[13px]">Se ha creado mediante la técnica de vibecoding (desarrollo y arquitectura de código guiados íntegramente por inteligencia artificial). El proyecto es totalmente abierto y puedes explorar todo el código fuente en <a href="https://github.com/pabloinfo1/pablometro" target="_blank" rel="noopener noreferrer" class="text-md-primary font-semibold underline underline-offset-2">GitHub</a>.</p>
         </div>
         
         <div class="flex flex-col gap-1">
@@ -781,5 +784,12 @@
   </div>
 
   <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      });
+    }
+  </script>
 </body>
 </html>
