@@ -17,6 +17,44 @@ const DEFAULT_ADV_PREFS = {
   precip: false
 };
 
+/* --- WATCHDOG (DETECCIÓN DE CARGA LENTA) --- */
+let tareasPendientes = 0;
+let watchdogTimer = null;
+
+function registrarTareaCarga() {
+  if (tareasPendientes === 0) {
+    watchdogTimer = setTimeout(() => {
+      const modal = document.getElementById('timeout-modal');
+      const panel = document.getElementById('timeout-modal-panel');
+      if (modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        void modal.offsetWidth; // forzar reflow
+        modal.classList.remove('opacity-0');
+        if (panel) panel.classList.remove('scale-95');
+      }
+    }, 12000); // 12 segundos de margen
+  }
+  tareasPendientes++;
+}
+
+function finalizarTareaCarga() {
+  tareasPendientes = Math.max(0, tareasPendientes - 1);
+  if (tareasPendientes === 0) {
+    clearTimeout(watchdogTimer);
+    const modal = document.getElementById('timeout-modal');
+    const panel = document.getElementById('timeout-modal-panel');
+    if (modal && !modal.classList.contains('hidden')) {
+       modal.classList.add('opacity-0');
+       if (panel) panel.classList.add('scale-95');
+       setTimeout(() => {
+         modal.classList.add('hidden');
+         modal.classList.remove('flex');
+       }, 300);
+    }
+  }
+}
+
 /* --- FUNCIÓN DE RASTREO (ANALYTICS) --- */
 function trackEvent(eventName, eventParams = {}) {
   if (typeof window.gtag === 'function') {
@@ -229,13 +267,6 @@ function mostrarToast(mensaje, icono = 'info') {
 
 function setEstadoCarga(cargando) {
   const content = document.getElementById('weather-content');
-  const iconoRefresh = document.getElementById('icono-force-update'); // Puede ser null ahora por el cambio en HTML
-
-  if (iconoRefresh) {
-    if (cargando) iconoRefresh.classList.add('animate-spin');
-    else iconoRefresh.classList.remove('animate-spin');
-  }
-
   if (!content) return;
 
   if (cargando) {
@@ -700,6 +731,7 @@ function cerrarModalAlerta() {
 
 /* --- LÓGICA METEOROLÓGICA --- */
 async function cargarTiempo(ine, silencioso = false, forzar = false) {
+  registrarTareaCarga();
   if (!silencioso) setEstadoCarga(true);
   try {
     const refreshParam = forzar ? '&refresh=1' : '';
@@ -725,6 +757,7 @@ async function cargarTiempo(ine, silencioso = false, forzar = false) {
     mostrarToast('No se pudo conectar con el servidor meteorológico', 'cloud_off');
   } finally {
     if (!silencioso) setEstadoCarga(false);
+    finalizarTareaCarga();
   }
 }
 
@@ -1344,6 +1377,38 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnCloseFaqModal = document.getElementById('btn-close-faq-modal');
   const btnOkFaqModal = document.getElementById('btn-ok-faq-modal');
 
+  // Modal Timeout Buttons
+  const timeoutModal = document.getElementById('timeout-modal');
+  const btnReloadApp = document.getElementById('btn-reload-app');
+  const btnResetApp = document.getElementById('btn-reset-app');
+  const btnCloseTimeout = document.getElementById('btn-close-timeout');
+
+  if (btnReloadApp) {
+    btnReloadApp.addEventListener('click', () => {
+      window.location.reload();
+    });
+  }
+
+  if (btnResetApp) {
+    btnResetApp.addEventListener('click', () => {
+      localStorage.clear();
+      sessionStorage.clear();
+      window.location.reload();
+    });
+  }
+
+  if (btnCloseTimeout) {
+    btnCloseTimeout.addEventListener('click', () => {
+      const panel = document.getElementById('timeout-modal-panel');
+      timeoutModal.classList.add('opacity-0');
+      if (panel) panel.classList.add('scale-95');
+      setTimeout(() => {
+        timeoutModal.classList.add('hidden');
+        timeoutModal.classList.remove('flex');
+      }, 300);
+    });
+  }
+
   // Habilitar arrastre con ratón en el carrusel para PC
   const carruselHoras = document.getElementById('ui-carrusel-horas');
   if (carruselHoras) {
@@ -1943,6 +2008,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /* --- CARGA INICIAL EN PARALELO --- */
   const cargarMunicipiosDB = async () => {
+    registrarTareaCarga();
     try {
       const res = await fetch('municipios.json');
       if (res.ok) {
@@ -1972,6 +2038,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (searchModal && !searchModal.classList.contains('hidden')) {
         renderizarResultadosBusqueda(searchInput.value);
       }
+      finalizarTareaCarga();
     }
   };
 
