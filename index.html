@@ -40,7 +40,7 @@
   
   <!-- Fuentes optimizadas (sin @import bloqueante y con subset de iconos exactos) -->
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0..1,0&icon_names=ac_unit,add_box,air,app_shortcut,arrow_back,check,check_circle,chevron_right,clear_day,clear_night,close,cloud,cloud_off,content_copy,cookie,desktop_windows,error,expand_more,foggy,help,hourglass_empty,info,install_mobile,ios_share,local_bar,location_disabled,location_off,location_on,mail,my_location,open_in_new,partly_cloudy_day,partly_cloudy_night,phone_iphone,photo_camera,public,rainy,schedule,search,settings,share,sync,thermostat,thunderstorm,tune,two_wheeler,warning,water_drop,wb_sunny,weather_snowy&display=block" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0..1,0&icon_names=ac_unit,add_box,air,app_shortcut,arrow_back,check,check_circle,chevron_right,clear_day,clear_night,close,cloud,cloud_off,content_copy,cookie,delete,desktop_windows,error,expand_more,foggy,help,hourglass_empty,info,install_mobile,ios_share,local_bar,location_disabled,location_off,location_on,mail,my_location,open_in_new,partly_cloudy_day,partly_cloudy_night,phone_iphone,photo_camera,public,rainy,refresh,schedule,search,settings,share,sync,thermostat,thunderstorm,tune,two_wheeler,warning,water_drop,wb_sunny,weather_snowy&display=block" rel="stylesheet" />
 
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -750,6 +750,33 @@
       <button id="btn-ok-ios-modal" class="w-full py-3 bg-md-primary text-white font-semibold rounded-2xl mt-1 active:scale-[0.98] transition">
         Entendido
       </button>
+    </div>
+  </div>
+
+  <!-- Modal de Timeout / Problemas de conexión -->
+  <div id="timeout-modal" class="fixed inset-0 z-[150] hidden items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-opacity opacity-0">
+    <div id="timeout-modal-panel" class="relative bg-md-surface border border-border-color rounded-3xl p-6 max-w-sm w-full shadow-2xl flex flex-col items-center gap-4 text-center transform scale-95 transition-transform duration-300">
+      <button id="btn-close-timeout" class="absolute top-4 right-4 p-1.5 rounded-full hover:bg-md-surface-container text-text-muted transition flex items-center justify-center">
+        <span class="material-symbols-rounded">close</span>
+      </button>
+      <div class="w-14 h-14 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mt-2 mb-1">
+        <span class="material-symbols-rounded text-[32px]">hourglass_empty</span>
+      </div>
+      <h3 class="text-xl font-bold text-text-main">Carga lenta</h3>
+      <p class="text-[13.5px] text-text-muted leading-relaxed mb-1">
+        La aplicación está tardando demasiado en responder. A veces el servidor se satura, puedes intentar recargar la página o restablecerla por completo.
+      </p>
+      
+      <div class="flex flex-col gap-2.5 w-full mt-2">
+        <button id="btn-reload-app" class="w-full py-3.5 bg-md-primary text-white font-semibold rounded-2xl active:scale-[0.98] transition shadow-md flex justify-center items-center gap-2">
+          <span class="material-symbols-rounded text-[20px]">refresh</span>
+          Recargar aplicación
+        </button>
+        <button id="btn-reset-app" class="w-full py-3 bg-md-surface-container hover:bg-md-surface-container-high text-red-500 font-semibold rounded-2xl active:scale-[0.98] transition border border-red-500/20 flex justify-center items-center gap-2 text-sm">
+          <span class="material-symbols-rounded text-[18px]">delete</span>
+          Borrar datos y restablecer
+        </button>
+      </div>
     </div>
   </div>
 
