@@ -276,10 +276,9 @@
     <section id="ui-lista-dias" class="bg-md-surface-container rounded-md-card overflow-hidden mb-6">
     </section>
 
-    <!-- Última actualización interactiva con icono visible -->
+    <!-- Última actualización interactiva (función oculta sin icono) -->
     <div class="mt-2 mb-6 flex justify-center">
-      <button id="btn-force-update" type="button" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs text-text-muted hover:text-text-main hover:bg-md-surface-container active:scale-95 transition cursor-pointer font-medium" aria-label="Forzar actualización">
-        <span id="icono-force-update" class="material-symbols-rounded text-[15px] text-md-primary">sync</span>
+      <button id="btn-force-update" type="button" class="inline-flex items-center px-3.5 py-1.5 rounded-full text-xs text-text-muted hover:text-text-main hover:bg-md-surface-container active:scale-95 transition cursor-pointer font-medium" aria-label="Forzar actualización">
         <span id="ui-ultima-act"></span>
       </button>
     </div>
@@ -364,7 +363,7 @@
   <div id="faq-modal" class="fixed inset-0 z-[120] hidden items-center justify-center p-4 bg-black/60 backdrop-blur-sm opacity-0 transition-opacity duration-300">
     <div id="faq-modal-panel" class="bg-md-surface border border-border-color rounded-3xl p-6 max-w-sm w-full shadow-2xl flex flex-col gap-5 transform scale-95 transition-transform duration-300 max-h-[85vh] overflow-y-auto no-scrollbar relative">
       
-      <div class="flex justify-between items-center -mt-1 sticky top-0 bg-md-surface z-10 pt-1 pb-2">
+      <div class="flex justify-between items-center -mx-6 -mt-6 px-6 pt-6 pb-3 sticky top-0 bg-md-surface z-10">
         <div class="flex items-center gap-2.5">
           <span class="material-symbols-rounded text-md-primary text-[24px]">help</span>
           <h4 class="text-lg font-bold text-text-main">Preguntas frecuentes</h4>
