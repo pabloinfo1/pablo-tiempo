@@ -1,4 +1,4 @@
-const WORKER_URL = 'https://aemet-proxy.pabloinfo1.workers.dev/';
+const WORKER_URL = 'https://api-pablometro.pabloinfo1.com/';
 const MAX_DATA_AGE_MS = 30 * 60 * 1000; // 30 minutos
 const MAX_RECENT_MUNICIPIOS = 5;
 let municipiosDB = [];
