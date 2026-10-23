@@ -364,9 +364,9 @@
 
   <!-- Modal de Preguntas Frecuentes (FAQ) -->
   <div id="faq-modal" class="fixed inset-0 z-[120] hidden items-center justify-center p-4 bg-black/60 backdrop-blur-sm opacity-0 transition-opacity duration-300">
-    <div id="faq-modal-panel" class="bg-md-surface border border-border-color rounded-3xl p-6 max-w-sm w-full shadow-2xl flex flex-col gap-5 transform scale-95 transition-transform duration-300 max-h-[85vh] overflow-y-auto no-scrollbar relative">
+    <div id="faq-modal-panel" class="bg-md-surface border border-border-color rounded-3xl max-w-sm w-full shadow-2xl flex flex-col transform scale-95 transition-transform duration-300 max-h-[85vh] overflow-hidden relative">
       
-      <div class="flex justify-between items-center -mx-6 -mt-6 px-6 pt-6 pb-3 sticky top-0 bg-md-surface z-10">
+      <div class="flex justify-between items-center px-6 pt-6 pb-5 bg-md-surface z-10 shrink-0">
         <div class="flex items-center gap-2.5">
           <span class="material-symbols-rounded text-md-primary text-[24px]">help</span>
           <h4 class="text-lg font-bold text-text-main">Preguntas frecuentes</h4>
@@ -376,86 +376,88 @@
         </button>
       </div>
       
-      <div class="text-[13.5px] text-text-main leading-relaxed flex flex-col gap-5 font-medium -mt-2">
-        
-        <div class="flex flex-col gap-1">
-          <p><strong>¿De dónde proceden los datos del tiempo?</strong></p>
-          <p class="text-text-muted text-[13px]">Todos los datos provienen directamente de la API oficial OpenData de la AEMET (Agencia Estatal de Meteorología), lo que garantiza la información oficial para cualquier municipio de España.</p>
-        </div>
-        
-        <div class="flex flex-col gap-1">
-          <p><strong>¿Cada cuánto tiempo se actualiza la información?</strong></p>
-          <p class="text-text-muted text-[13px]">Los datos se sincronizan y se guardan en caché durante 30 minutos para garantizar rapidez y no saturar las peticiones a la AEMET. Si quieres comprobar la previsión al minuto, puedes forzar la actualización tocando sobre el texto de «Última actualización».</p>
-        </div>
-        
-        <div class="flex flex-col gap-1">
-          <p><strong>¿Por qué no veo el porcentaje de lluvia o los milímetros acumulados en cada hora?</strong></p>
-          <p class="text-text-muted text-[13px]">Los milímetros acumulados (mm) solo se muestran en las horas donde la lluvia prevista supera los 0,1 mm, evitando saturar la tarjeta con ceros innecesarios. Por su parte, la probabilidad de lluvia en porcentaje (%) viene oculta por defecto para mantener un diseño limpio, pero puedes activarla cuando quieras desde los Ajustes &rarr; Información meteorológica.</p>
-        </div>
-        
-        <div class="flex flex-col gap-1">
-          <p><strong>¿Por qué aparece porcentaje de lluvia en horas en las que no llueve?</strong></p>
-          <p class="text-text-muted text-[13px]">La AEMET no calcula la probabilidad de precipitación hora a hora, sino agrupada en bloques temporales (por ejemplo, de 08:00 a 14:00 o de 14:00 a 20:00). Por eso verás el mismo porcentaje repartido en varias horas consecutivas, aunque en algunas de ellas el modelo meteorológico no espere litros acumulados.</p>
-        </div>
-        
-        <div class="flex flex-col gap-1">
-          <p><strong>¿En qué consisten el «Modo Moto» y el «Modo Botellón»?</strong></p>
-          <p class="text-text-muted text-[13px]">Son modos prácticos pensados para planes específicos en la calle:</p>
-          <ul class="list-disc pl-4 text-text-muted text-[13px] flex flex-col gap-1 mt-1">
-            <li><strong>Modo Moto:</strong> Evalúa en tiempo real factores como rachas de viento lateral, asfalto mojado, frío extremo o cotas bajas de nieve para avisarte de si es seguro salir de ruta.</li>
-            <li><strong>Modo Botellón:</strong> Analiza si la sensación térmica, el viento o la lluvia van a fastidiar el plan de estar al aire libre.</li>
-          </ul>
-        </div>
-        
-        <div class="flex flex-col gap-1">
-          <p><strong>¿Por qué veo el viento o la sensación térmica en una hora concreta si los tengo desactivados en opciones?</strong></p>
-          <p class="text-text-muted text-[13px]">Cuando tienes activado el Modo Moto o el Modo Botellón y una hora concreta entra en zona de alerta, la app muestra ese dato específico en color rojo (aunque lo tengas oculto en ajustes) para que entiendas al instante el motivo de la advertencia. Las horas que no tengan alertas seguirán respetando tus opciones y no mostrarán nada extra.</p>
-        </div>
-        
-        <div class="flex flex-col gap-1">
-          <p><strong>¿Cómo puedo instalar Pablómetro en mi móvil?</strong></p>
-          <p class="text-text-muted text-[13px]">Al ser una aplicación web progresiva (PWA), puedes añadirla directamente a tu pantalla de inicio sin pasar por tiendas de aplicaciones:</p>
-          <ul class="list-disc pl-4 text-text-muted text-[13px] flex flex-col gap-1 mt-1">
-            <li><strong>En Android:</strong> Entra en los ajustes de la app y pulsa en Instalar aplicación, o pulsa los tres puntos del navegador (⋮) y selecciona Instalar aplicación / Añadir a pantalla de inicio.</li>
-            <li><strong>En iOS (iPhone / iPad):</strong> Abre la web en Safari, pulsa el botón Compartir (el icono del cuadrado con la flecha hacia arriba) y selecciona Añadir a pantalla de inicio.</li>
-          </ul>
-        </div>
-        
-        <div class="flex flex-col gap-1">
-          <p><strong>¿Puedo consultar el tiempo sin conexión a internet?</strong></p>
-          <p class="text-text-muted text-[13px]">Sí, en parte. Pablómetro guarda en la memoria de tu dispositivo la última predicción que hayas consultado, lo que te permite abrir la app y revisarla aunque te quedes sin cobertura puntual. Para actualizar las cifras o cambiar de municipio sí necesitarás conexión.</p>
-        </div>
-        
-        <div class="flex flex-col gap-1">
-          <p><strong>¿Pablómetro almacena mis datos personales o mi ubicación?</strong></p>
-          <p class="text-text-muted text-[13px]">No, en absoluto. La aplicación no cuenta con registros, cuentas de usuario ni bases de datos externas. Tu localidad guardada, el historial de municipios recientes y los ajustes de color o tema se guardan únicamente en el navegador de tu propio teléfono (localStorage).</p>
-        </div>
-        
-        <div class="flex flex-col gap-1">
-          <p><strong>¿Por qué se han borrado mis ajustes o mi historial de búsqueda?</strong></p>
-          <p class="text-text-muted text-[13px]">Como toda tu configuración vive exclusivamente en el almacenamiento local de tu navegador, si utilizas pestañas de navegación privada/incógnito o haces una limpieza de cookies y caché, el navegador reinicia la memoria y la app vuelve a su estado inicial.</p>
-        </div>
-        
-        <div class="flex flex-col gap-1">
-          <p><strong>¿La aplicación es gratuita? ¿Tiene publicidad?</strong></p>
-          <p class="text-text-muted text-[13px]">Es 100% gratuita y sin ningún tipo de publicidad invasiva. Al no suponer actualmente un coste económico de mantenimiento, la idea es mantenerla completamente limpia y accesible. Si en el futuro los costes del servidor cambian, se buscarían opciones sin comprometer la experiencia de uso.</p>
-        </div>
-        
-        <div class="flex flex-col gap-1">
-          <p><strong>¿Cómo se ha desarrollado la web?</strong></p>
-          <p class="text-text-muted text-[13px]">Se ha creado mediante la técnica de vibecoding (desarrollo y arquitectura de código guiados íntegramente por inteligencia artificial). El proyecto es totalmente abierto y puedes explorar todo el código fuente en <a href="https://github.com/pabloinfo1/pablometro" target="_blank" rel="noopener noreferrer" class="text-md-primary font-semibold underline underline-offset-2">GitHub</a>.</p>
-        </div>
-        
-        <div class="flex flex-col gap-1">
-          <p><strong>¿Qué modelos de inteligencia artificial se han utilizado?</strong></p>
-          <p class="text-text-muted text-[13px]">Para la generación, depuración de lógica y diseño de toda la aplicación se han utilizado los modelos Gemini 3.1 Pro y Gemini Argon 4.</p>
+      <div class="flex-1 overflow-y-auto no-scrollbar px-6 pb-6 flex flex-col gap-5">
+        <div class="text-[13.5px] text-text-main leading-relaxed flex flex-col gap-5 font-medium">
+          
+          <div class="flex flex-col gap-1">
+            <p><strong>¿De dónde proceden los datos del tiempo?</strong></p>
+            <p class="text-text-muted text-[13px]">Todos los datos provienen directamente de la API oficial OpenData de la AEMET (Agencia Estatal de Meteorología), lo que garantiza la información oficial para cualquier municipio de España.</p>
+          </div>
+          
+          <div class="flex flex-col gap-1">
+            <p><strong>¿Cada cuánto tiempo se actualiza la información?</strong></p>
+            <p class="text-text-muted text-[13px]">Los datos se sincronizan y se guardan en caché durante 30 minutos para garantizar rapidez y no saturar las peticiones a la AEMET. Si quieres comprobar la previsión al minuto, puedes forzar la actualización tocando sobre el texto de «Última actualización».</p>
+          </div>
+          
+          <div class="flex flex-col gap-1">
+            <p><strong>¿Por qué no veo el porcentaje de lluvia o los milímetros acumulados en cada hora?</strong></p>
+            <p class="text-text-muted text-[13px]">Los milímetros acumulados (mm) solo se muestran en las horas donde la lluvia prevista supera los 0,1 mm, evitando saturar la tarjeta con ceros innecesarios. Por su parte, la probabilidad de lluvia en porcentaje (%) viene oculta por defecto para mantener un diseño limpio, pero puedes activarla cuando quieras desde los Ajustes &rarr; Información meteorológica.</p>
+          </div>
+          
+          <div class="flex flex-col gap-1">
+            <p><strong>¿Por qué aparece porcentaje de lluvia en horas en las que no llueve?</strong></p>
+            <p class="text-text-muted text-[13px]">La AEMET no calcula la probabilidad de precipitación hora a hora, sino agrupada en bloques temporales (por ejemplo, de 08:00 a 14:00 o de 14:00 a 20:00). Por eso verás el mismo porcentaje repartido en varias horas consecutivas, aunque en algunas de ellas el modelo meteorológico no espere litros acumulados.</p>
+          </div>
+          
+          <div class="flex flex-col gap-1">
+            <p><strong>¿En qué consisten el «Modo Moto» y el «Modo Botellón»?</strong></p>
+            <p class="text-text-muted text-[13px]">Son modos prácticos pensados para planes específicos en la calle:</p>
+            <ul class="list-disc pl-4 text-text-muted text-[13px] flex flex-col gap-1 mt-1">
+              <li><strong>Modo Moto:</strong> Evalúa en tiempo real factores como rachas de viento lateral, asfalto mojado, frío extremo o cotas bajas de nieve para avisarte de si es seguro salir de ruta.</li>
+              <li><strong>Modo Botellón:</strong> Analiza si la sensación térmica, el viento o la lluvia van a fastidiar el plan de estar al aire libre.</li>
+            </ul>
+          </div>
+          
+          <div class="flex flex-col gap-1">
+            <p><strong>¿Por qué veo el viento o la sensación térmica en una hora concreta si los tengo desactivados en opciones?</strong></p>
+            <p class="text-text-muted text-[13px]">Cuando tienes activado el Modo Moto o el Modo Botellón y una hora concreta entra en zona de alerta, la app muestra ese dato específico en color rojo (aunque lo tengas oculto en ajustes) para que entiendas al instante el motivo de la advertencia. Las horas que no tengan alertas seguirán respetando tus opciones y no mostrarán nada extra.</p>
+          </div>
+          
+          <div class="flex flex-col gap-1">
+            <p><strong>¿Cómo puedo instalar Pablómetro en mi móvil?</strong></p>
+            <p class="text-text-muted text-[13px]">Al ser una aplicación web progresiva (PWA), puedes añadirla directamente a tu pantalla de inicio sin pasar por tiendas de aplicaciones:</p>
+            <ul class="list-disc pl-4 text-text-muted text-[13px] flex flex-col gap-1 mt-1">
+              <li><strong>En Android:</strong> Entra en los ajustes de la app y pulsa en Instalar aplicación, o pulsa los tres puntos del navegador (⋮) y selecciona Instalar aplicación / Añadir a pantalla de inicio.</li>
+              <li><strong>En iOS (iPhone / iPad):</strong> Abre la web en Safari, pulsa el botón Compartir (el icono del cuadrado con la flecha hacia arriba) y selecciona Añadir a pantalla de inicio.</li>
+            </ul>
+          </div>
+          
+          <div class="flex flex-col gap-1">
+            <p><strong>¿Puedo consultar el tiempo sin conexión a internet?</strong></p>
+            <p class="text-text-muted text-[13px]">Sí, en parte. Pablómetro guarda en la memoria de tu dispositivo la última predicción que hayas consultado, lo que te permite abrir la app y revisarla aunque te quedes sin cobertura puntual. Para actualizar las cifras o cambiar de municipio sí necesitarás conexión.</p>
+          </div>
+          
+          <div class="flex flex-col gap-1">
+            <p><strong>¿Pablómetro almacena mis datos personales o mi ubicación?</strong></p>
+            <p class="text-text-muted text-[13px]">No, en absoluto. La aplicación no cuenta con registros, cuentas de usuario ni bases de datos externas. Tu localidad guardada, el historial de municipios recientes y los ajustes de color o tema se guardan únicamente en el navegador de tu propio teléfono (localStorage).</p>
+          </div>
+          
+          <div class="flex flex-col gap-1">
+            <p><strong>¿Por qué se han borrado mis ajustes o mi historial de búsqueda?</strong></p>
+            <p class="text-text-muted text-[13px]">Como toda tu configuración vive exclusivamente en el almacenamiento local de tu navegador, si utilizas pestañas de navegación privada/incógnito o haces una limpieza de cookies y caché, el navegador reinicia la memoria y la app vuelve a su estado inicial.</p>
+          </div>
+          
+          <div class="flex flex-col gap-1">
+            <p><strong>¿La aplicación es gratuita? ¿Tiene publicidad?</strong></p>
+            <p class="text-text-muted text-[13px]">Es 100% gratuita y sin ningún tipo de publicidad invasiva. Al no suponer actualmente un coste económico de mantenimiento, la idea es mantenerla completamente limpia y accesible. Si en el futuro los costes del servidor cambian, se buscarían opciones sin comprometer la experiencia de uso.</p>
+          </div>
+          
+          <div class="flex flex-col gap-1">
+            <p><strong>¿Cómo se ha desarrollado la web?</strong></p>
+            <p class="text-text-muted text-[13px]">Se ha creado mediante la técnica de vibecoding (desarrollo y arquitectura de código guiados íntegramente por inteligencia artificial). El proyecto es totalmente abierto y puedes explorar todo el código fuente en <a href="https://github.com/pabloinfo1/pablometro" target="_blank" rel="noopener noreferrer" class="text-md-primary font-semibold underline underline-offset-2">GitHub</a>.</p>
+          </div>
+          
+          <div class="flex flex-col gap-1">
+            <p><strong>¿Qué modelos de inteligencia artificial se han utilizado?</strong></p>
+            <p class="text-text-muted text-[13px]">Para la generación, depuración de lógica y diseño de toda la aplicación se han utilizado los modelos Gemini 3.1 Pro y Gemini Argon 4.</p>
+          </div>
+
         </div>
 
+        <button id="btn-ok-faq-modal" class="w-full py-3.5 bg-md-primary text-white font-semibold rounded-2xl active:scale-[0.98] transition shrink-0">
+          Entendido
+        </button>
       </div>
-
-      <button id="btn-ok-faq-modal" class="w-full py-3.5 bg-md-primary text-white font-semibold rounded-2xl active:scale-[0.98] transition">
-        Entendido
-      </button>
     </div>
   </div>
 
